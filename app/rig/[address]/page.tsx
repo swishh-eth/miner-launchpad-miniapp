@@ -22,6 +22,11 @@ import { useUserRigStats } from "@/hooks/useUserRigStats";
 import { usePriceHistory } from "@/hooks/usePriceHistory";
 import { useMineHistory } from "@/hooks/useMineHistory";
 import { useFarcaster } from "@/hooks/useFarcaster";
+import {
+  useBatchedTransaction,
+  encodeApproveCall,
+  type Call,
+} from "@/hooks/useBatchedTransaction";
 import { CONTRACT_ADDRESSES, MULTICALL_ABI, ERC20_ABI, NATIVE_ETH_ADDRESS } from "@/lib/contracts";
 import { getEthPrice, getDonutPrice, cn } from "@/lib/utils";
 import { useSwapPrice, useSwapQuote, formatBuyAmount } from "@/hooks/useSwapQuote";
@@ -105,11 +110,16 @@ export default function RigDetailPage() {
   const { data: txHash, writeContract, isPending: isWriting, reset: resetWrite } = useWriteContract();
   const { data: receipt, isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash, chainId: DEFAULT_CHAIN_ID });
 
-  // Trade transaction handling
-  const { writeContract: writeApprove, isPending: isApproving, data: approveTxHash } = useWriteContract();
+  // Trade transaction handling - for buys (ETH -> Token, no approval needed)
   const { sendTransaction, isPending: isSwapping, data: swapTxHash } = useSendTransaction();
-  const { isLoading: isWaitingApprove, isSuccess: approveSuccess } = useWaitForTransactionReceipt({ hash: approveTxHash });
   const { isLoading: isWaitingSwap, isSuccess: swapSuccess, isError: swapError } = useWaitForTransactionReceipt({ hash: swapTxHash });
+
+  // Batched transaction handling - for sells (Token -> ETH, needs approval)
+  const {
+    execute: executeBatch,
+    state: batchState,
+    reset: resetBatch,
+  } = useBatchedTransaction();
 
   // Trade balances
   const queryClient = useQueryClient();
@@ -188,32 +198,6 @@ export default function RigDetailPage() {
     enabled: mode === "trade" && !!rigInfo?.unitAddress && !!tradeAmount && parseFloat(tradeAmount) > 0 && !!address,
   });
 
-  // Check allowance for selling unit tokens
-  const { data: unitAllowance, refetch: refetchAllowance } = useReadContract({
-    address: rigInfo?.unitAddress as Address,
-    abi: ERC20_ABI,
-    functionName: "allowance",
-    args: address && tradeQuote?.transaction?.to
-      ? [address, tradeQuote.transaction.to as Address]
-      : undefined,
-    chainId: DEFAULT_CHAIN_ID,
-    query: {
-      enabled: tradeDirection === "sell" && !!rigInfo?.unitAddress && !!address && !!tradeQuote?.transaction?.to,
-    },
-  });
-
-  const needsTradeApproval = useMemo(() => {
-    if (tradeDirection === "buy" || !tradeAmount || parseFloat(tradeAmount) === 0) return false;
-    // If we don't have allowance data yet or quote isn't loaded, assume we need approval for sells
-    if (unitAllowance === undefined || unitAllowance === null || !tradeQuote?.transaction?.to) return true;
-    try {
-      const sellAmountWei = parseUnits(tradeAmount, 18);
-      const currentAllowance = BigInt(unitAllowance.toString());
-      return currentAllowance < sellAmountWei;
-    } catch {
-      return true; // Default to needing approval if something goes wrong
-    }
-  }, [tradeDirection, tradeAmount, unitAllowance, tradeQuote?.transaction?.to]);
 
   // Result handling
   const resetMineResult = useCallback(() => {
@@ -352,47 +336,48 @@ export default function RigDetailPage() {
   }, [address, connect, customMessage, rigState, rigAddress, resetMineResult, resetWrite, showMineResult, writeContract]);
 
   // Trade handlers
-  const [pendingSwapAfterApproval, setPendingSwapAfterApproval] = useState(false);
-
-  const executeSwap = useCallback(() => {
-    if (!tradeQuote?.transaction || !address) return;
-    sendTransaction({
-      to: tradeQuote.transaction.to as Address,
-      data: tradeQuote.transaction.data as `0x${string}`,
-      value: BigInt(tradeQuote.transaction.value || "0"),
-      chainId: DEFAULT_CHAIN_ID,
-    });
-  }, [tradeQuote, address, sendTransaction]);
-
   const handleTrade = useCallback(async () => {
     if (!tradeQuote?.transaction || !address || !tradeAmount) return;
 
-    // If approval is needed, approve first then swap
-    if (needsTradeApproval && rigInfo?.unitAddress) {
-      setPendingSwapAfterApproval(true);
+    if (tradeDirection === "sell" && rigInfo?.unitAddress) {
+      // Sells: use batched transaction (approve + swap)
       const sellAmountWei = parseUnits(tradeAmount, 18);
-      writeApprove({
-        address: rigInfo.unitAddress as Address,
-        abi: ERC20_ABI,
-        functionName: "approve",
-        args: [tradeQuote.transaction.to as Address, sellAmountWei],
+      const approveCall = encodeApproveCall(
+        rigInfo.unitAddress as Address,
+        tradeQuote.transaction.to as Address,
+        sellAmountWei
+      );
+
+      const swapCall: Call = {
+        to: tradeQuote.transaction.to as Address,
+        data: tradeQuote.transaction.data as `0x${string}`,
+        value: BigInt(tradeQuote.transaction.value || "0"),
+      };
+
+      try {
+        await executeBatch([approveCall, swapCall]);
+      } catch (error) {
+        console.error("Trade failed:", error);
+      }
+    } else {
+      // Buys: no approval needed, just swap directly
+      sendTransaction({
+        to: tradeQuote.transaction.to as Address,
+        data: tradeQuote.transaction.data as `0x${string}`,
+        value: BigInt(tradeQuote.transaction.value || "0"),
         chainId: DEFAULT_CHAIN_ID,
       });
-    } else {
-      // No approval needed, just swap
-      executeSwap();
     }
-  }, [tradeQuote, address, tradeAmount, needsTradeApproval, rigInfo?.unitAddress, writeApprove, executeSwap]);
+  }, [tradeQuote, address, tradeAmount, tradeDirection, rigInfo?.unitAddress, executeBatch, sendTransaction]);
 
   // Track last processed swap hash to detect new successful swaps
   const lastProcessedSwapHash = useRef<string | null>(null);
 
-  // Handle swap result
+  // Handle swap result (for buys via sendTransaction)
   useEffect(() => {
     if (swapSuccess && swapTxHash && swapTxHash !== lastProcessedSwapHash.current) {
       lastProcessedSwapHash.current = swapTxHash;
       setTradeAmount("");
-      setPendingSwapAfterApproval(false);
       // Refetch balances after a short delay to let RPC update
       setTimeout(() => {
         refetchBalances();
@@ -410,11 +395,10 @@ export default function RigDetailPage() {
   // Track last processed error hash
   const lastProcessedErrorHash = useRef<string | null>(null);
 
-  // Handle swap failure
+  // Handle swap failure (for buys via sendTransaction)
   useEffect(() => {
     if (swapError && swapTxHash && swapTxHash !== lastProcessedErrorHash.current) {
       lastProcessedErrorHash.current = swapTxHash;
-      setPendingSwapAfterApproval(false);
       if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
       setTradeResult("failure");
       tradeResultTimeoutRef.current = setTimeout(() => {
@@ -424,21 +408,35 @@ export default function RigDetailPage() {
     }
   }, [swapError, swapTxHash]);
 
-  // After approval success, refetch and execute swap if pending
+  // Handle batched transaction result (for sells)
   useEffect(() => {
-    if (approveSuccess) {
-      refetchAllowance();
-      refetchTradeQuote();
-      // If we were waiting to swap after approval, execute the swap now
-      if (pendingSwapAfterApproval) {
-        setPendingSwapAfterApproval(false);
-        // Small delay to ensure state is updated
-        setTimeout(() => {
-          executeSwap();
-        }, 100);
-      }
+    console.log('[Trade] batchState changed to:', batchState);
+    if (batchState === "success") {
+      console.log('[Trade] Batch succeeded!');
+      setTradeAmount("");
+      resetBatch();
+      // Refetch balances after a short delay to let RPC update
+      setTimeout(() => {
+        refetchBalances();
+        refetchRigState();
+      }, 1000);
+      if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
+      setTradeResult("success");
+      tradeResultTimeoutRef.current = setTimeout(() => {
+        setTradeResult(null);
+        tradeResultTimeoutRef.current = null;
+      }, 3000);
+    } else if (batchState === "error") {
+      console.log('[Trade] Batch error!');
+      resetBatch();
+      if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
+      setTradeResult("failure");
+      tradeResultTimeoutRef.current = setTimeout(() => {
+        setTradeResult(null);
+        tradeResultTimeoutRef.current = null;
+      }, 3000);
     }
-  }, [approveSuccess, refetchAllowance, refetchTradeQuote, pendingSwapAfterApproval, executeSwap]);
+  }, [batchState, resetBatch, refetchBalances, refetchRigState]);
 
   // Trade calculations
   const tradeBalance = tradeDirection === "buy" ? ethBalanceData : unitBalanceData;
@@ -485,7 +483,8 @@ export default function RigDetailPage() {
   }, [tradeAmount, tradeBalance]);
 
   const isTradeLoading = isLoadingTradePrice || isLoadingTradeQuote;
-  const isTradePending = isApproving || isWaitingApprove || isSwapping || isWaitingSwap;
+  const isBatchPending = batchState === "pending" || batchState === "confirming";
+  const isTradePending = isBatchPending || isSwapping || isWaitingSwap;
 
   const buttonLabel = useMemo(() => {
     if (!rigState) return "LOADING...";
@@ -509,11 +508,11 @@ export default function RigDetailPage() {
     if (!tradeAmount || parseFloat(tradeAmount) === 0) return "Enter amount";
     if (tradeInsufficientBalance) return "Insufficient balance";
     if (hasNoLiquidity) return "No liquidity";
-    if (isApproving || isWaitingApprove) return "Approving...";
+    if (isBatchPending) return batchState === "confirming" ? "Confirming..." : "Swapping...";
     if (isSwapping || isWaitingSwap) return "Swapping...";
     if (isLoadingTradeQuote) return "Loading...";
     return tradeDirection === "buy" ? "Buy" : "Sell";
-  }, [tradeResult, isConnected, tradeAmount, tradeInsufficientBalance, hasNoLiquidity, isApproving, isWaitingApprove, isSwapping, isWaitingSwap, isLoadingTradeQuote, tradeDirection]);
+  }, [tradeResult, isConnected, tradeAmount, tradeInsufficientBalance, hasNoLiquidity, isBatchPending, batchState, isSwapping, isWaitingSwap, isLoadingTradeQuote, tradeDirection]);
 
   const canTrade = isConnected && tradeAmount && parseFloat(tradeAmount) > 0 && !tradeInsufficientBalance && !isTradeLoading && !hasNoLiquidity && !!tradeQuote?.transaction?.to;
 

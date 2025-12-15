@@ -1,11 +1,7 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Flame } from "lucide-react";
-import {
-  useWaitForTransactionReceipt,
-  useWriteContract,
-} from "wagmi";
 import { formatEther, type Address } from "viem";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -18,10 +14,14 @@ import {
 } from "@/hooks/useAuctionState";
 import { useRigInfo, useRigState } from "@/hooks/useRigState";
 import { useFarcaster, getUserDisplayName, getUserHandle, initialsFrom } from "@/hooks/useFarcaster";
-import { CONTRACT_ADDRESSES, MULTICALL_ABI, ERC20_ABI } from "@/lib/contracts";
+import {
+  useBatchedTransaction,
+  encodeApproveCall,
+  encodeContractCall,
+} from "@/hooks/useBatchedTransaction";
+import { CONTRACT_ADDRESSES, MULTICALL_ABI } from "@/lib/contracts";
 import { cn, getEthPrice, getDonutPrice } from "@/lib/utils";
 import {
-  DEFAULT_CHAIN_ID,
   DEFAULT_ETH_PRICE_USD,
   DEFAULT_DONUT_PRICE_USD,
   PRICE_REFETCH_INTERVAL_MS,
@@ -227,13 +227,19 @@ export default function AuctionsPage() {
   const [ethUsdPrice, setEthUsdPrice] = useState<number>(DEFAULT_ETH_PRICE_USD);
   const [donutUsdPrice, setDonutUsdPrice] = useState<number>(DEFAULT_DONUT_PRICE_USD);
   const [selectedAuctionAddress, setSelectedAuctionAddress] = useState<`0x${string}` | null>(null);
-  const [txStep, setTxStep] = useState<"idle" | "approving" | "buying">("idle");
   const [pendingAuction, setPendingAuction] = useState<AuctionListItem | null>(
     null
   );
 
   // Farcaster context and wallet connection
   const { user, address, isConnected, connect } = useFarcaster();
+
+  // Batched transaction hook for approve + buy
+  const {
+    execute: executeBatch,
+    state: batchState,
+    reset: resetBatch,
+  } = useBatchedTransaction();
 
   // Get all rig addresses
   const { addresses: rigAddresses } = useAllRigAddresses();
@@ -286,19 +292,6 @@ export default function AuctionsPage() {
     });
   }, [auctions, ethUsdPrice, donutUsdPrice]);
 
-  // Transaction handling
-  const {
-    data: txHash,
-    writeContract,
-    isPending: isWriting,
-    reset: resetWrite,
-  } = useWriteContract();
-
-  const { data: receipt, isLoading: isConfirming } =
-    useWaitForTransactionReceipt({
-      hash: txHash,
-      chainId: DEFAULT_CHAIN_ID,
-    });
 
   // Fetch ETH and DONUT prices
   useEffect(() => {
@@ -315,74 +308,17 @@ export default function AuctionsPage() {
     return () => clearInterval(interval);
   }, []);
 
-  // Handle receipt
+  // Handle batch transaction completion
   useEffect(() => {
-    if (!receipt) return;
-
-    if (receipt.status === "reverted") {
-      setTxStep("idle");
+    if (batchState === "success") {
       setPendingAuction(null);
-      resetWrite();
-      return;
+      refetchAuctions();
+      resetBatch();
+    } else if (batchState === "error") {
+      setPendingAuction(null);
+      resetBatch();
     }
-
-    if (receipt.status === "success") {
-      if (txStep === "approving" && pendingAuction) {
-        // Approval succeeded, now buy
-        resetWrite();
-        setTxStep("buying");
-        return;
-      }
-
-      if (txStep === "buying") {
-        // Buy succeeded!
-        setTxStep("idle");
-        setPendingAuction(null);
-        refetchAuctions();
-        resetWrite();
-        return;
-      }
-    }
-    return;
-  }, [receipt, txStep, pendingAuction, resetWrite, refetchAuctions]);
-
-  // Auto-trigger buy after approval
-  useEffect(() => {
-    if (
-      txStep === "buying" &&
-      pendingAuction &&
-      !isWriting &&
-      !isConfirming &&
-      !txHash
-    ) {
-      executeBuy(pendingAuction);
-    }
-  }, [txStep, pendingAuction, isWriting, isConfirming, txHash]);
-
-  const executeBuy = useCallback(
-    async (auction: AuctionListItem) => {
-      if (!address) return;
-
-      const deadline = BigInt(
-        Math.floor(Date.now() / 1000) + AUCTION_DEADLINE_BUFFER_SECONDS
-      );
-
-      await writeContract({
-        account: address as Address,
-        address: CONTRACT_ADDRESSES.multicall as Address,
-        abi: MULTICALL_ABI,
-        functionName: "buy",
-        args: [
-          auction.rigAddress,
-          auction.auctionState.epochId,
-          deadline,
-          auction.auctionState.price,
-        ],
-        chainId: DEFAULT_CHAIN_ID,
-      });
-    },
-    [address, writeContract]
-  );
+  }, [batchState, refetchAuctions, resetBatch]);
 
   const handleBuy = useCallback(
     async (auction: AuctionListItem) => {
@@ -396,28 +332,38 @@ export default function AuctionsPage() {
 
       setPendingAuction(auction);
 
+      const deadline = BigInt(
+        Math.floor(Date.now() / 1000) + AUCTION_DEADLINE_BUFFER_SECONDS
+      );
+
+      // Create batched calls: approve + buy
+      const approveCall = encodeApproveCall(
+        auction.auctionState.paymentToken,
+        CONTRACT_ADDRESSES.multicall as Address,
+        auction.auctionState.price
+      );
+
+      const buyCall = encodeContractCall(
+        CONTRACT_ADDRESSES.multicall as Address,
+        MULTICALL_ABI,
+        "buy",
+        [
+          auction.rigAddress,
+          auction.auctionState.epochId,
+          deadline,
+          auction.auctionState.price,
+        ]
+      );
+
       try {
-        // First approve LP tokens
-        setTxStep("approving");
-        await writeContract({
-          account: address as Address,
-          address: auction.auctionState.paymentToken,
-          abi: ERC20_ABI,
-          functionName: "approve",
-          args: [
-            CONTRACT_ADDRESSES.multicall as Address,
-            auction.auctionState.price,
-          ],
-          chainId: DEFAULT_CHAIN_ID,
-        });
+        await executeBatch([approveCall, buyCall]);
       } catch (error) {
-        console.error("Approval failed:", error);
-        setTxStep("idle");
+        console.error("Transaction failed:", error);
         setPendingAuction(null);
-        resetWrite();
+        resetBatch();
       }
     },
-    [address, connect, writeContract, resetWrite]
+    [address, connect, executeBatch, resetBatch]
   );
 
   const userDisplayName = getUserDisplayName(user);
@@ -464,7 +410,7 @@ export default function AuctionsPage() {
   const selectedTokenSymbol = selectedRigInfo?.tokenSymbol ?? "TOKEN";
   const selectedUnitUri = selectedRigState?.unitUri;
 
-  const isBuying = txStep !== "idle" && (isWriting || isConfirming);
+  const isBuying = batchState === "pending" || batchState === "confirming";
 
   return (
     <main className="flex h-screen w-screen justify-center overflow-hidden bg-black font-mono text-white">
@@ -601,8 +547,8 @@ export default function AuctionsPage() {
                     disabled={isBuying || hasInsufficientBalance}
                   >
                     {isBuying
-                      ? txStep === "approving"
-                        ? "APPROVING..."
+                      ? batchState === "confirming"
+                        ? "CONFIRMING..."
                         : "BUYING..."
                       : "BUY"}
                   </Button>
