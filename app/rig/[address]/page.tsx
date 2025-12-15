@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowDownUp, Copy, Check } from "lucide-react";
 import Link from "next/link";
 import {
@@ -122,14 +122,12 @@ export default function RigDetailPage() {
   } = useBatchedTransaction();
 
   // Trade balances
-  const queryClient = useQueryClient();
-
-  const { data: ethBalanceData } = useBalance({
+  const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
     address,
     chainId: DEFAULT_CHAIN_ID,
   });
 
-  const { data: unitBalanceData } = useBalance({
+  const { data: unitBalanceData, refetch: refetchUnitBalance } = useBalance({
     address,
     token: rigInfo?.unitAddress as Address,
     chainId: DEFAULT_CHAIN_ID,
@@ -137,9 +135,9 @@ export default function RigDetailPage() {
   });
 
   const refetchBalances = useCallback(() => {
-    // Invalidate all balance queries to force fresh fetch
-    queryClient.invalidateQueries({ queryKey: ['balance'] });
-  }, [queryClient]);
+    refetchEthBalance();
+    refetchUnitBalance();
+  }, [refetchEthBalance, refetchUnitBalance]);
 
   // Swap tokens for trading
   const sellToken = tradeDirection === "buy" ? NATIVE_ETH_ADDRESS : (rigInfo?.unitAddress || "");
