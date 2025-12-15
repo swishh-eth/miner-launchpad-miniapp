@@ -1,0 +1,99 @@
+"use client";
+
+import { useEffect, useState } from "react";
+import Link from "next/link";
+import { formatEther } from "viem";
+import type { RigListItem } from "@/hooks/useAllRigs";
+
+const formatEth = (value: bigint, maximumFractionDigits = 4) => {
+  if (value === 0n) return "0";
+  const asNumber = Number(formatEther(value));
+  if (!Number.isFinite(asNumber)) {
+    return formatEther(value);
+  }
+  return asNumber.toLocaleString(undefined, {
+    maximumFractionDigits,
+  });
+};
+
+// Convert ipfs:// URL to gateway URL
+const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY || "https://gateway.pinata.cloud";
+
+const ipfsToGateway = (uri: string) => {
+  if (!uri) return null;
+  if (uri.startsWith("ipfs://")) {
+    return `${PINATA_GATEWAY}/ipfs/${uri.slice(7)}`;
+  }
+  return uri;
+};
+
+type RigCardProps = {
+  rig: RigListItem;
+  ethUsdPrice?: number;
+};
+
+export function RigCard({ rig, ethUsdPrice = 3500 }: RigCardProps) {
+  const priceUsd = Number(formatEther(rig.price)) * ethUsdPrice;
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  // Fetch metadata to get image URL
+  useEffect(() => {
+    if (!rig.unitUri) return;
+
+    const metadataUrl = ipfsToGateway(rig.unitUri);
+    if (!metadataUrl) return;
+
+    fetch(metadataUrl)
+      .then((res) => res.json())
+      .then((metadata) => {
+        if (metadata.image) {
+          setLogoUrl(ipfsToGateway(metadata.image));
+        }
+      })
+      .catch(() => {
+        // Silently fail - will show fallback
+      });
+  }, [rig.unitUri]);
+
+  return (
+    <Link href={`/rig/${rig.address}`} className="block mb-1.5">
+      <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 transition-colors cursor-pointer">
+        {/* Token Logo */}
+        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center overflow-hidden">
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={rig.tokenSymbol}
+              className="w-12 h-12 object-contain"
+            />
+          ) : (
+            <span className="text-pink-500 font-bold text-lg">
+              {rig.tokenSymbol.slice(0, 2)}
+            </span>
+          )}
+        </div>
+
+        {/* Token Name & Symbol */}
+        <div className="flex-1 min-w-0">
+          <div className="font-semibold text-white truncate">
+            {rig.tokenName}
+          </div>
+          <div className="text-sm text-gray-500">
+            ${rig.tokenSymbol}
+          </div>
+        </div>
+
+        {/* Price */}
+        <div className="flex-shrink-0 text-right">
+          <div className="text-sm font-semibold text-pink-500">
+            {formatEth(rig.price, 5)} ETH
+          </div>
+          <div className="text-xs text-gray-500">
+            ${priceUsd.toFixed(2)}
+          </div>
+        </div>
+      </div>
+    </Link>
+  );
+}
+

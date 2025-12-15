@@ -154,8 +154,8 @@ export function AddToFarcasterDialog({
 
           {/* Error message */}
           {status === "error" && errorMessage && (
-            <div className="mb-4 rounded-lg border border-red-800 bg-red-950/50 p-3 text-center">
-              <p className="text-sm text-red-400">{errorMessage}</p>
+            <div className="mb-4 rounded-lg border border-zinc-700 bg-zinc-900 p-3 text-center">
+              <p className="text-sm text-zinc-400">{errorMessage}</p>
             </div>
           )}
 
@@ -167,10 +167,10 @@ export function AddToFarcasterDialog({
               className={cn(
                 "w-full gap-2 rounded-xl py-6 text-base font-bold transition-all",
                 status === "idle" &&
-                  "bg-pink-500 hover:bg-pink-400 text-black",
+                  "bg-pink-500 hover:bg-pink-600 text-black",
                 status === "success" &&
-                  "bg-green-600 hover:bg-green-600 text-white",
-                status === "error" && "bg-red-600 hover:bg-red-600 text-white"
+                  "bg-pink-500 hover:bg-pink-600 text-black",
+                status === "error" && "bg-zinc-700 hover:bg-zinc-600 text-white"
               )}
             >
               {status === "adding" && (

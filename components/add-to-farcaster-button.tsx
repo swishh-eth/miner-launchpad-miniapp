@@ -113,15 +113,15 @@ export function AddToFarcasterButton({
         size={size}
         className={cn(
           "gap-2 transition-all",
-          status === "success" && "bg-green-600 hover:bg-green-600",
-          status === "error" && "bg-red-600 hover:bg-red-600",
+          status === "success" && "bg-pink-500 hover:bg-pink-600",
+          status === "error" && "bg-zinc-700 hover:bg-zinc-600",
           className
         )}
       >
         {buttonContent()}
       </Button>
       {status === "error" && errorMessage && (
-        <p className="text-xs text-red-400 text-center">{errorMessage}</p>
+        <p className="text-xs text-zinc-400 text-center">{errorMessage}</p>
       )}
     </div>
   );

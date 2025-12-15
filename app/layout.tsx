@@ -2,7 +2,7 @@ import "@/app/globals.css";
 import type { Metadata } from "next";
 import { Providers } from "@/components/providers";
 
-const appDomain = "https://glazecorp.vercel.app";
+const appDomain = "https://miner-launchpad.vercel.app";
 const heroImageUrl = `${appDomain}/media/hero.png`;
 const splashImageUrl = `${appDomain}/media/splash.png`;
 
@@ -10,23 +10,23 @@ const miniAppEmbed = {
   version: "1",
   imageUrl: heroImageUrl,
   button: {
-    title: "We Glaze The World",
+    title: "Launch & Mine",
     action: {
       type: "launch_miniapp" as const,
-      name: "GlazeCorp",
+      name: "Miner Launchpad",
       url: appDomain,
       splashImageUrl,
-      splashBackgroundColor: "#FEE7EC",
+      splashBackgroundColor: "#000000",
     },
   },
 };
 
 export const metadata: Metadata = {
-  title: "We Glaze The World",
-  description: "Claim the glaze factory and earn donuts on Base.",
+  title: "Miner Launchpad",
+  description: "Launch, mine, and earn tokens on Base. A decentralized token launchpad with fair Dutch auction mining.",
   openGraph: {
-    title: "GlazeCorp",
-    description: "Race the hive to control the donut mine and keep the glaze flowing.",
+    title: "Miner Launchpad",
+    description: "Launch your own mining rig, mine on any rig, and participate in treasury auctions.",
     url: appDomain,
     images: [
       {
