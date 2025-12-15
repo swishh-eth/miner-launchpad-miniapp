@@ -53,8 +53,8 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
     id: batchId?.id ?? "",
     query: {
       enabled: !!batchId?.id,
-      refetchInterval: (data) =>
-        data.state.data?.status === "success" ? false : 1000,
+      refetchInterval: (query) =>
+        query.state.data?.status === "success" || query.state.data?.status === "failure" ? false : 1000,
     },
   });
 
@@ -80,12 +80,6 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
     chainCapabilities?.['wallet_sendCalls'] !== undefined ||
     Object.keys(chainCapabilities ?? {}).length > 0;
 
-  // Debug logging
-  useEffect(() => {
-    console.log('[EIP-5792] Capabilities:', capabilities);
-    console.log('[EIP-5792] Chain capabilities:', chainCapabilities);
-    console.log('[EIP-5792] Reports capability:', reportsCapability);
-  }, [capabilities, chainCapabilities, reportsCapability]);
 
   // Track if we're in sequential mode
   const isSequentialMode = useRef(false);
@@ -93,11 +87,10 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
 
   // Handle batch status changes
   useEffect(() => {
-    console.log('[EIP-5792] Batch status update - batchId:', batchId, 'callsStatus:', callsStatus);
     if (!batchId?.id) return;
 
-    if (callsStatus?.status === "success" || callsStatus?.status === "CONFIRMED") {
-      console.log('[EIP-5792] Batch confirmed!');
+    // Status can be "pending", "success", or "failure"
+    if (callsStatus?.status === "success") {
       setState("success");
       setPendingCalls(null);
     }
@@ -106,8 +99,6 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
   // Handle batch errors - fall back to sequential if wallet doesn't support batching
   useEffect(() => {
     if (!batchError) return;
-
-    console.error('[EIP-5792] Batch error detected:', batchError);
 
     // Check if this is a "method not supported" error - fall back to sequential
     const errorMessage = batchError.message || String(batchError);
@@ -118,7 +109,7 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
       errorMessage.includes('MethodNotFound');
 
     if (isMethodNotSupported && pendingCalls && pendingCalls.length > 0) {
-      console.log('[EIP-5792] Method not supported, falling back to sequential');
+      // Wallet doesn't support batching, fall back to sequential
       resetBatch();
       isSequentialMode.current = true;
       const firstCall = pendingCalls[0];
@@ -181,7 +172,6 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
 
   // Update state based on pending status
   useEffect(() => {
-    console.log('[EIP-5792] Pending status - batch:', isBatchPending, 'seq:', isSeqPending, 'seqConfirming:', isSeqConfirming);
     if (isBatchPending || isSeqPending) {
       setState("pending");
     } else if (isSeqConfirming) {
@@ -193,8 +183,6 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
     async (calls: Call[]) => {
       if (calls.length === 0) return;
 
-      console.log('[EIP-5792] Executing calls:', calls);
-
       setError(null);
       setState("pending");
       setPendingCalls(calls);
@@ -202,7 +190,6 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
       lastProcessedIndex.current = -1;
 
       // Always try batched sendCalls first - many wallets support it without reporting capability
-      console.log('[EIP-5792] Attempting batched sendCalls...');
       isSequentialMode.current = false;
       try {
         await sendCalls({
@@ -213,10 +200,8 @@ export function useBatchedTransaction(): UseBatchedTransactionReturn {
           })),
           chainId: DEFAULT_CHAIN_ID,
         });
-        console.log('[EIP-5792] Batched sendCalls succeeded');
       } catch (err) {
-        // If batching fails, fall back to sequential
-        console.log('[EIP-5792] Batched sendCalls failed, falling back to sequential:', err);
+        // If batching fails synchronously, fall back to sequential
         isSequentialMode.current = true;
         const firstCall = calls[0];
         sendTransaction({

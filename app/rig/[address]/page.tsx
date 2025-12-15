@@ -410,9 +410,7 @@ export default function RigDetailPage() {
 
   // Handle batched transaction result (for sells)
   useEffect(() => {
-    console.log('[Trade] batchState changed to:', batchState);
     if (batchState === "success") {
-      console.log('[Trade] Batch succeeded!');
       setTradeAmount("");
       resetBatch();
       // Refetch balances after a short delay to let RPC update
@@ -427,7 +425,6 @@ export default function RigDetailPage() {
         tradeResultTimeoutRef.current = null;
       }, 3000);
     } else if (batchState === "error") {
-      console.log('[Trade] Batch error!');
       resetBatch();
       if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
       setTradeResult("failure");
