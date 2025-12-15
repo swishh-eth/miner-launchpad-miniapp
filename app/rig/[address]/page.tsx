@@ -650,6 +650,16 @@ export default function RigDetailPage() {
     return `${secs}s`;
   };
 
+  const timeAgo = (timestamp: number): string => {
+    const now = Math.floor(Date.now() / 1000);
+    const diff = now - timestamp;
+    if (diff < 60) return `${diff}s ago`;
+    if (diff < 3600) return `${Math.floor(diff / 60)}m ago`;
+    if (diff < 86400) return `${Math.floor(diff / 3600)}h ago`;
+    if (diff < 604800) return `${Math.floor(diff / 86400)}d ago`;
+    return `${Math.floor(diff / 604800)}w ago`;
+  };
+
   const handleCopyAddress = useCallback(async (address: string) => {
     try {
       await navigator.clipboard.writeText(address);
@@ -1039,8 +1049,9 @@ export default function RigDetailPage() {
                         </div>
                       )}
                     </div>
-                    <div className="text-xs text-zinc-500 flex-shrink-0">
-                      Ξ{Number(formatEther(mine.price)).toFixed(4)}
+                    <div className="text-xs flex-shrink-0 text-right">
+                      <div className="text-white">Ξ{Number(formatEther(mine.price)).toFixed(4)}</div>
+                      <div className="text-zinc-500">{timeAgo(mine.timestamp)}</div>
                     </div>
                   </div>
                 ))
@@ -1116,6 +1127,15 @@ export default function RigDetailPage() {
                     )}
                   </div>
                   <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-800 flex items-center justify-center">
+                      {tradeDirection === "buy" ? (
+                        <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
+                      ) : tokenLogoUrl ? (
+                        <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
+                      ) : (
+                        <span className="text-xs font-bold text-pink-500">{tokenSymbol.slice(0, 2)}</span>
+                      )}
+                    </div>
                     <input
                       type="number"
                       value={tradeAmount}
@@ -1159,6 +1179,17 @@ export default function RigDetailPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-800 flex items-center justify-center">
+                      {tradeDirection === "buy" ? (
+                        tokenLogoUrl ? (
+                          <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
+                        ) : (
+                          <span className="text-xs font-bold text-pink-500">{tokenSymbol.slice(0, 2)}</span>
+                        )
+                      ) : (
+                        <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
+                      )}
+                    </div>
                     <div className="flex-1 text-xl font-semibold text-zinc-300">
                       {isTradeLoading && tradeAmount ? (
                         <span className="inline-flex items-center gap-0.5">

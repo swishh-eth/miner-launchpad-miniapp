@@ -13,6 +13,7 @@ import {
   getRigs,
   searchRigs,
   getTrendingRigs,
+  getTopRigs,
   type SubgraphRig,
 } from "@/lib/subgraph-launchpad";
 
@@ -27,8 +28,8 @@ export type RigListItem = {
   price: bigint;
   ups: bigint;
   unitPrice: bigint;
-  totalVolume: bigint;
-  mineCount: number;
+  totalMinted: bigint; // Total minted (from subgraph)
+  epochCount: number; // Number of epochs (replaces mineCount)
   createdAt: number;
 };
 
@@ -100,10 +101,11 @@ export function useRigList(
       if (sortBy === "trending") {
         return getTrendingRigs(first);
       }
-
-      const orderBy = sortBy === "top" ? "totalVolume" : "createdAt";
-      const orderDirection = "desc";
-      return getRigs(first, skip, orderBy, orderDirection);
+      if (sortBy === "top") {
+        return getTopRigs(first);
+      }
+      // "new" - sort by createdAt
+      return getRigs(first, skip, "createdAt", "desc");
     },
     staleTime: 30_000,
     retry: false, // Don't retry - fallback to on-chain instead
@@ -244,11 +246,11 @@ export function useExploreRigs(
   account: `0x${string}` | undefined
 ) {
   // Always call both hooks (React rules), but only use one based on searchQuery
-  const { rigs: searchRigs, isLoading: isLoadingSearch } = useSearchRigs(searchQuery);
+  const { rigs: searchResults, isLoading: isLoadingSearch } = useSearchRigs(searchQuery);
   const { rigs: listRigs, isLoading: isLoadingList } = useRigList(sortBy);
 
   const isSearching = searchQuery.length >= 2;
-  const subgraphRigs = isSearching ? searchRigs : listRigs;
+  const subgraphRigs = isSearching ? searchResults : listRigs;
   const isLoadingSubgraph = isSearching ? isLoadingSearch : isLoadingList;
 
   // Get all rig addresses from on-chain as fallback
@@ -294,8 +296,8 @@ export function useExploreRigs(
         price: onChainState?.price ?? 0n,
         ups: onChainState?.nextUps ?? 0n,
         unitPrice: onChainState?.unitPrice ?? 0n,
-        totalVolume: 0n, // Not available without subgraph
-        mineCount: 0, // Not available without subgraph
+        totalMinted: 0n, // Not available without subgraph
+        epochCount: 0, // Not available without subgraph
         createdAt: 0, // Not available without subgraph
       };
     });
@@ -306,24 +308,24 @@ export function useExploreRigs(
     }
   } else {
     // Subgraph mode
-    combinedRigs = subgraphRigs.map((subgraphRig) => {
+    combinedRigs = subgraphRigs.map((subgraphRig: SubgraphRig) => {
       const onChainState = rigStates.find(
         (s) => s.address.toLowerCase() === subgraphRig.id.toLowerCase()
       )?.state;
 
       return {
         address: subgraphRig.id.toLowerCase() as `0x${string}`,
-        unitAddress: subgraphRig.unit.id.toLowerCase() as `0x${string}`,
-        tokenName: subgraphRig.unit.name,
-        tokenSymbol: subgraphRig.unit.symbol,
+        unitAddress: subgraphRig.unit.toLowerCase() as `0x${string}`,
+        tokenName: subgraphRig.tokenName,
+        tokenSymbol: subgraphRig.tokenSymbol,
         unitUri: onChainState?.unitUri ?? "",
-        launcher: subgraphRig.launcher.toLowerCase() as `0x${string}`,
+        launcher: subgraphRig.launcher.id.toLowerCase() as `0x${string}`,
         miner: onChainState?.miner ?? zeroAddress,
         price: onChainState?.price ?? 0n,
         ups: onChainState?.nextUps ?? 0n,
         unitPrice: onChainState?.unitPrice ?? 0n,
-        totalVolume: BigInt(subgraphRig.totalVolume),
-        mineCount: parseInt(subgraphRig.mineCount),
+        totalMinted: BigInt(Math.floor(parseFloat(subgraphRig.minted) * 1e18)),
+        epochCount: parseInt(subgraphRig.epochId),
         createdAt: parseInt(subgraphRig.createdAt),
       };
     });

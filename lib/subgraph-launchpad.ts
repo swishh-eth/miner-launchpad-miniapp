@@ -1,70 +1,87 @@
 import { GraphQLClient, gql } from "graphql-request";
 
-// Subgraph URL - replace with actual URL when deployed
+// Subgraph URL (Goldsky)
 export const LAUNCHPAD_SUBGRAPH_URL =
   process.env.NEXT_PUBLIC_LAUNCHPAD_SUBGRAPH_URL ||
-  "https://api.thegraph.com/subgraphs/name/PLACEHOLDER";
+  "https://api.goldsky.com/api/public/project_cmgscxhw81j5601xmhgd42rej/subgraphs/miner-launchpad/1.0.0/gn";
 
 const client = new GraphQLClient(LAUNCHPAD_SUBGRAPH_URL);
 
-// Types
+// Types matching the subgraph schema
+export type SubgraphLaunchpad = {
+  id: string;
+  totalRigs: string;
+  totalRevenue: string;
+  totalMinted: string;
+  protocolRevenue: string;
+};
+
 export type SubgraphRig = {
-  id: string; // rig address
-  launcher: string;
-  unit: {
-    id: string;
-    name: string;
-    symbol: string;
-  };
-  auction: {
-    id: string;
-  };
-  lpToken: string;
+  id: string;
+  launchpad: { id: string };
+  launcher: { id: string };
+  unit: string; // Bytes address
+  auction: string; // Bytes address
+  lpToken: string; // Bytes address
+  tokenName: string;
+  tokenSymbol: string;
+  epochId: string;
+  revenue: string;
+  teamRevenue: string;
+  minted: string;
   createdAt: string;
-  totalVolume: string;
-  mineCount: string;
+  createdAtBlock: string;
 };
 
-export type SubgraphMine = {
+export type SubgraphAccount = {
   id: string;
-  miner: string;
-  price: string;
+  rigsLaunched: SubgraphRig[];
+  rigAccounts: SubgraphRigAccount[];
+};
+
+export type SubgraphRigAccount = {
+  id: string; // {rigAddress}-{accountAddress}
+  rig: { id: string };
+  account: { id: string };
+  spent: string;
+  earned: string;
+  mined: string;
+};
+
+export type SubgraphEpoch = {
+  id: string; // {rigAddress}-{epochId}
+  rig: { id: string };
+  rigAccount: { id: string; account: { id: string } };
   uri: string;
-  timestamp: string;
-  minedAmount: string;
-  txHash: string;
-};
-
-export type SubgraphUserRigStats = {
-  id: string;
-  user: string;
-  rig: string;
-  totalMined: string;
-  totalSpent: string;
-  totalEarned: string;
-  mineCount: string;
-};
-
-export type SubgraphAuction = {
-  id: string;
-  rig: {
-    id: string;
-    unit: {
-      name: string;
-      symbol: string;
-    };
-  };
-  totalBuys: string;
-  totalVolume: string;
+  startTime: string;
+  initPrice: string;
+  mined: string;
+  spent: string;
+  earned: string;
 };
 
 // Queries
+
+// Get global launchpad stats
+export const GET_LAUNCHPAD_STATS_QUERY = gql`
+  query GetLaunchpadStats {
+    launchpad(id: "launchpad") {
+      id
+      totalRigs
+      totalRevenue
+      totalMinted
+      protocolRevenue
+    }
+  }
+`;
+
+// Get rigs with pagination and ordering
 export const GET_RIGS_QUERY = gql`
   query GetRigs(
     $first: Int!
     $skip: Int!
-    $orderBy: String!
-    $orderDirection: String!
+    $orderBy: Rig_orderBy!
+    $orderDirection: OrderDirection!
   ) {
     rigs(
       first: $first
@@ -73,156 +90,280 @@ export const GET_RIGS_QUERY = gql`
       orderDirection: $orderDirection
     ) {
       id
-      launcher
-      unit {
-        id
-        name
-        symbol
-      }
-      auction {
+      launchpad {
         id
       }
+      launcher {
+        id
+      }
+      unit
+      auction
       lpToken
+      tokenName
+      tokenSymbol
+      epochId
+      revenue
+      teamRevenue
+      minted
       createdAt
-      totalVolume
-      mineCount
+      createdAtBlock
     }
   }
 `;
 
+// Search rigs by name or symbol
 export const SEARCH_RIGS_QUERY = gql`
   query SearchRigs($search: String!, $first: Int!) {
     rigs(
       first: $first
       where: {
         or: [
-          { unit_: { name_contains_nocase: $search } }
-          { unit_: { symbol_contains_nocase: $search } }
+          { tokenName_contains_nocase: $search }
+          { tokenSymbol_contains_nocase: $search }
           { id_contains_nocase: $search }
         ]
       }
-      orderBy: totalVolume
+      orderBy: minted
       orderDirection: desc
     ) {
       id
-      launcher
-      unit {
-        id
-        name
-        symbol
-      }
-      auction {
+      launchpad {
         id
       }
+      launcher {
+        id
+      }
+      unit
+      auction
       lpToken
+      tokenName
+      tokenSymbol
+      epochId
+      revenue
+      teamRevenue
+      minted
       createdAt
-      totalVolume
-      mineCount
+      createdAtBlock
     }
   }
 `;
 
-export const GET_MINE_HISTORY_QUERY = gql`
-  query GetMineHistory($rigId: String!, $first: Int!, $skip: Int!) {
-    mines(
-      where: { rig: $rigId }
-      orderBy: timestamp
+// Get a single rig by ID
+export const GET_RIG_QUERY = gql`
+  query GetRig($id: ID!) {
+    rig(id: $id) {
+      id
+      launchpad {
+        id
+      }
+      launcher {
+        id
+      }
+      unit
+      auction
+      lpToken
+      tokenName
+      tokenSymbol
+      epochId
+      revenue
+      teamRevenue
+      minted
+      createdAt
+      createdAtBlock
+    }
+  }
+`;
+
+// Get epochs (mining history) for a rig
+export const GET_EPOCHS_QUERY = gql`
+  query GetEpochs($rigId: String!, $first: Int!, $skip: Int!) {
+    epoches(
+      where: { rig_: { id: $rigId } }
+      orderBy: startTime
       orderDirection: desc
       first: $first
       skip: $skip
-    ) {
-      id
-      miner
-      price
-      uri
-      timestamp
-      minedAmount
-      txHash
-    }
-  }
-`;
-
-export const GET_USER_RIG_STATS_QUERY = gql`
-  query GetUserRigStats($userId: String!, $rigId: String!) {
-    userRigStats(id: $userId_$rigId) {
-      id
-      user
-      rig
-      totalMined
-      totalSpent
-      totalEarned
-      mineCount
-    }
-  }
-`;
-
-export const GET_USER_ALL_STATS_QUERY = gql`
-  query GetUserAllStats($userId: String!, $first: Int!) {
-    userRigStats(where: { user: $userId }, first: $first) {
-      id
-      user
-      rig
-      totalMined
-      totalSpent
-      totalEarned
-      mineCount
-    }
-  }
-`;
-
-export const GET_ALL_AUCTIONS_QUERY = gql`
-  query GetAllAuctions($first: Int!, $skip: Int!) {
-    auctions(
-      first: $first
-      skip: $skip
-      orderBy: totalVolume
-      orderDirection: desc
     ) {
       id
       rig {
         id
-        unit {
-          name
-          symbol
+      }
+      rigAccount {
+        id
+        account {
+          id
         }
       }
-      totalBuys
-      totalVolume
+      uri
+      startTime
+      initPrice
+      mined
+      spent
+      earned
     }
   }
 `;
 
-export const GET_TRENDING_RIGS_QUERY = gql`
-  query GetTrendingRigs($first: Int!) {
-    rigs(
-      first: $first
-      orderBy: lastMineAt
+// Get all recent epochs (for debugging/general feed)
+export const GET_ALL_EPOCHS_QUERY = gql`
+  query GetAllEpochs($first: Int!, $skip: Int!) {
+    epoches(
+      orderBy: startTime
       orderDirection: desc
+      first: $first
+      skip: $skip
     ) {
       id
-      launcher
-      unit {
-        id
-        name
-        symbol
-      }
-      auction {
+      rig {
         id
       }
+      rigAccount {
+        id
+        account {
+          id
+        }
+      }
+      uri
+      startTime
+      initPrice
+      mined
+      spent
+      earned
+    }
+  }
+`;
+
+// Get user's stats for a specific rig
+export const GET_RIG_ACCOUNT_QUERY = gql`
+  query GetRigAccount($id: ID!) {
+    rigAccount(id: $id) {
+      id
+      rig {
+        id
+      }
+      account {
+        id
+      }
+      spent
+      earned
+      mined
+    }
+  }
+`;
+
+// Get all RigAccounts for a user
+export const GET_USER_RIG_ACCOUNTS_QUERY = gql`
+  query GetUserRigAccounts($accountId: String!, $first: Int!) {
+    rigAccounts(where: { account_: { id: $accountId } }, first: $first) {
+      id
+      rig {
+        id
+      }
+      account {
+        id
+      }
+      spent
+      earned
+      mined
+    }
+  }
+`;
+
+// Get account with all their data
+export const GET_ACCOUNT_QUERY = gql`
+  query GetAccount($id: ID!) {
+    account(id: $id) {
+      id
+      rigsLaunched {
+        id
+        tokenName
+        tokenSymbol
+        minted
+        revenue
+      }
+      rigAccounts {
+        id
+        rig {
+          id
+        }
+        spent
+        earned
+        mined
+      }
+    }
+  }
+`;
+
+// Get trending rigs (most recently mined)
+export const GET_TRENDING_RIGS_QUERY = gql`
+  query GetTrendingRigs($first: Int!) {
+    rigs(first: $first, orderBy: epochId, orderDirection: desc) {
+      id
+      launchpad {
+        id
+      }
+      launcher {
+        id
+      }
+      unit
+      auction
       lpToken
+      tokenName
+      tokenSymbol
+      epochId
+      revenue
+      teamRevenue
+      minted
       createdAt
-      totalVolume
-      mineCount
+      createdAtBlock
+    }
+  }
+`;
+
+// Get top rigs by minted amount
+export const GET_TOP_RIGS_QUERY = gql`
+  query GetTopRigs($first: Int!) {
+    rigs(first: $first, orderBy: minted, orderDirection: desc) {
+      id
+      launchpad {
+        id
+      }
+      launcher {
+        id
+      }
+      unit
+      auction
+      lpToken
+      tokenName
+      tokenSymbol
+      epochId
+      revenue
+      teamRevenue
+      minted
+      createdAt
+      createdAtBlock
     }
   }
 `;
 
 // API Functions
+
+export async function getLaunchpadStats(): Promise<SubgraphLaunchpad | null> {
+  try {
+    const data = await client.request<{ launchpad: SubgraphLaunchpad | null }>(
+      GET_LAUNCHPAD_STATS_QUERY
+    );
+    return data.launchpad;
+  } catch {
+    return null;
+  }
+}
+
 export async function getRigs(
   first = 20,
   skip = 0,
-  orderBy = "totalVolume",
-  orderDirection = "desc"
+  orderBy: "minted" | "createdAt" | "epochId" | "revenue" = "minted",
+  orderDirection: "asc" | "desc" = "desc"
 ): Promise<SubgraphRig[]> {
   try {
     const data = await client.request<{ rigs: SubgraphRig[] }>(GET_RIGS_QUERY, {
@@ -233,7 +374,6 @@ export async function getRigs(
     });
     return data.rigs;
   } catch {
-    // Silently fail - on-chain fallback will be used
     return [];
   }
 }
@@ -252,105 +392,145 @@ export async function searchRigs(
     );
     return data.rigs;
   } catch {
-    // Silently fail - on-chain fallback will be used
     return [];
   }
 }
 
-export async function getMineHistory(
+export async function getRig(id: string): Promise<SubgraphRig | null> {
+  try {
+    const data = await client.request<{ rig: SubgraphRig | null }>(
+      GET_RIG_QUERY,
+      {
+        id: id.toLowerCase(),
+      }
+    );
+    return data.rig;
+  } catch {
+    return null;
+  }
+}
+
+export async function getEpochs(
   rigId: string,
   first = 50,
   skip = 0
-): Promise<SubgraphMine[]> {
+): Promise<SubgraphEpoch[]> {
   try {
-    const data = await client.request<{ mines: SubgraphMine[] }>(
-      GET_MINE_HISTORY_QUERY,
+    const data = await client.request<{ epoches: SubgraphEpoch[] }>(
+      GET_EPOCHS_QUERY,
       {
         rigId: rigId.toLowerCase(),
         first,
         skip,
       }
     );
-    return data.mines;
-  } catch {
-    // Silently fail - subgraph may be unavailable
+    return data.epoches ?? [];
+  } catch (error) {
+    console.error("[getEpochs] Error:", error);
     return [];
   }
 }
 
-export async function getUserRigStats(
-  userId: string,
-  rigId: string
-): Promise<SubgraphUserRigStats | null> {
-  try {
-    const data = await client.request<{
-      userRigStats: SubgraphUserRigStats | null;
-    }>(GET_USER_RIG_STATS_QUERY, {
-      userId: userId.toLowerCase(),
-      rigId: rigId.toLowerCase(),
-    });
-    return data.userRigStats;
-  } catch {
-    // Silently fail - subgraph may be unavailable
-    return null;
-  }
-}
-
-export async function getUserAllStats(
-  userId: string,
-  first = 100
-): Promise<SubgraphUserRigStats[]> {
-  try {
-    const data = await client.request<{ userRigStats: SubgraphUserRigStats[] }>(
-      GET_USER_ALL_STATS_QUERY,
-      {
-        userId: userId.toLowerCase(),
-        first,
-      }
-    );
-    return data.userRigStats;
-  } catch {
-    // Silently fail - subgraph may be unavailable
-    return [];
-  }
-}
-
-export async function getAllAuctions(
-  first = 20,
+export async function getAllEpochs(
+  first = 50,
   skip = 0
-): Promise<SubgraphAuction[]> {
+): Promise<SubgraphEpoch[]> {
   try {
-    const data = await client.request<{ auctions: SubgraphAuction[] }>(
-      GET_ALL_AUCTIONS_QUERY,
+    const data = await client.request<{ epoches: SubgraphEpoch[] }>(
+      GET_ALL_EPOCHS_QUERY,
       {
         first,
         skip,
       }
     );
-    return data.auctions;
+    return data.epoches ?? [];
   } catch {
-    // Silently fail - on-chain fallback will be used
     return [];
+  }
+}
+
+export async function getRigAccount(
+  rigId: string,
+  accountId: string
+): Promise<SubgraphRigAccount | null> {
+  try {
+    // ID format is {rigAddress}-{accountAddress}
+    const id = `${rigId.toLowerCase()}-${accountId.toLowerCase()}`;
+    const data = await client.request<{
+      rigAccount: SubgraphRigAccount | null;
+    }>(GET_RIG_ACCOUNT_QUERY, { id });
+    return data.rigAccount;
+  } catch {
+    return null;
+  }
+}
+
+export async function getUserRigAccounts(
+  accountId: string,
+  first = 100
+): Promise<SubgraphRigAccount[]> {
+  try {
+    const data = await client.request<{ rigAccounts: SubgraphRigAccount[] }>(
+      GET_USER_RIG_ACCOUNTS_QUERY,
+      {
+        accountId: accountId.toLowerCase(),
+        first,
+      }
+    );
+    return data.rigAccounts;
+  } catch {
+    return [];
+  }
+}
+
+export async function getAccount(id: string): Promise<SubgraphAccount | null> {
+  try {
+    const data = await client.request<{ account: SubgraphAccount | null }>(
+      GET_ACCOUNT_QUERY,
+      {
+        id: id.toLowerCase(),
+      }
+    );
+    return data.account;
+  } catch {
+    return null;
   }
 }
 
 export async function getTrendingRigs(first = 20): Promise<SubgraphRig[]> {
   try {
-    // Get rigs ordered by most recently mined
     const data = await client.request<{ rigs: SubgraphRig[] }>(
       GET_TRENDING_RIGS_QUERY,
-      {
-        first,
-      }
+      { first }
     );
     return data.rigs;
   } catch {
-    // Silently fail - on-chain fallback will be used
     return [];
   }
 }
 
-// Helper to format subgraph data
+export async function getTopRigs(first = 20): Promise<SubgraphRig[]> {
+  try {
+    const data = await client.request<{ rigs: SubgraphRig[] }>(
+      GET_TOP_RIGS_QUERY,
+      { first }
+    );
+    return data.rigs;
+  } catch {
+    return [];
+  }
+}
+
+// Helper to format subgraph address
 export function formatSubgraphAddress(address: string): `0x${string}` {
   return address.toLowerCase() as `0x${string}`;
 }
+
+// Legacy compatibility - maps old function names to new ones
+export const getMineHistory = getEpochs;
+export const getUserRigStats = getRigAccount;
+export const getUserAllStats = getUserRigAccounts;
+
+// Legacy type aliases
+export type SubgraphMine = SubgraphEpoch;
+export type SubgraphUserRigStats = SubgraphRigAccount;

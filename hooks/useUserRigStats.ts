@@ -1,23 +1,21 @@
 import { useQuery } from "@tanstack/react-query";
 import {
-  getUserRigStats,
-  getUserAllStats,
-  type SubgraphUserRigStats,
+  getRigAccount,
+  getUserRigAccounts,
+  type SubgraphRigAccount,
 } from "@/lib/subgraph-launchpad";
 
 export type UserRigStats = {
   totalMined: bigint;
   totalSpent: bigint;
   totalEarned: bigint;
-  mineCount: number;
 };
 
-function parseUserRigStats(stats: SubgraphUserRigStats): UserRigStats {
+function parseRigAccountStats(stats: SubgraphRigAccount): UserRigStats {
   return {
-    totalMined: BigInt(stats.totalMined),
-    totalSpent: BigInt(stats.totalSpent),
-    totalEarned: BigInt(stats.totalEarned),
-    mineCount: parseInt(stats.mineCount),
+    totalMined: BigInt(Math.floor(parseFloat(stats.mined) * 1e18)),
+    totalSpent: BigInt(Math.floor(parseFloat(stats.spent) * 1e18)),
+    totalEarned: BigInt(Math.floor(parseFloat(stats.earned) * 1e18)),
   };
 }
 
@@ -29,8 +27,8 @@ export function useUserRigStats(
     queryKey: ["userRigStats", userAddress, rigAddress],
     queryFn: async () => {
       if (!userAddress || !rigAddress) return null;
-      const rawStats = await getUserRigStats(userAddress, rigAddress);
-      return rawStats ? parseUserRigStats(rawStats) : null;
+      const rawStats = await getRigAccount(rigAddress, userAddress);
+      return rawStats ? parseRigAccountStats(rawStats) : null;
     },
     enabled: !!userAddress && !!rigAddress,
     staleTime: 15_000,
@@ -51,8 +49,8 @@ export function useUserAllStats(userAddress: `0x${string}` | undefined) {
     queryKey: ["userAllStats", userAddress],
     queryFn: async () => {
       if (!userAddress) return [];
-      const rawStats = await getUserAllStats(userAddress);
-      return rawStats.map(parseUserRigStats);
+      const rawStats = await getUserRigAccounts(userAddress);
+      return rawStats.map(parseRigAccountStats);
     },
     enabled: !!userAddress,
     staleTime: 30_000,

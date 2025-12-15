@@ -78,14 +78,14 @@ export function useSwapTokens() {
   const { data: launchpadTokens, isLoading } = useQuery({
     queryKey: ["swapTokens"],
     queryFn: async () => {
-      // Fetch all rigs from subgraph
-      const rigs = await getRigs(100, 0, "totalVolume", "desc");
+      // Fetch all rigs from subgraph (ordered by minted amount)
+      const rigs = await getRigs(100, 0, "minted", "desc");
 
       // Map to token format
       const tokens: SwapToken[] = rigs.map((rig) => ({
-        address: rig.unit.id,
-        symbol: rig.unit.symbol,
-        name: rig.unit.name,
+        address: rig.unit,
+        symbol: rig.tokenSymbol,
+        name: rig.tokenName,
         decimals: 18, // All unit tokens are 18 decimals
         logoUrl: undefined,
         isLaunchpadToken: true,

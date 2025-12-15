@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { getMineHistory, type SubgraphMine } from "@/lib/subgraph-launchpad";
+import { getEpochs, type SubgraphEpoch } from "@/lib/subgraph-launchpad";
 
 export type MineMessage = {
   id: string;
@@ -8,18 +8,20 @@ export type MineMessage = {
   uri: string;
   timestamp: number;
   minedAmount: bigint;
-  txHash: string;
+  spent: bigint;
+  earned: bigint;
 };
 
-function parseMineFromSubgraph(mine: SubgraphMine): MineMessage {
+function parseEpochToMineMessage(epoch: SubgraphEpoch): MineMessage {
   return {
-    id: mine.id,
-    miner: mine.miner.toLowerCase() as `0x${string}`,
-    price: BigInt(mine.price),
-    uri: mine.uri,
-    timestamp: parseInt(mine.timestamp),
-    minedAmount: BigInt(mine.minedAmount),
-    txHash: mine.txHash,
+    id: epoch.id,
+    miner: epoch.rigAccount.account.id.toLowerCase() as `0x${string}`,
+    price: BigInt(Math.floor(parseFloat(epoch.initPrice) * 1e18)), // Convert from BigDecimal
+    uri: epoch.uri,
+    timestamp: parseInt(epoch.startTime),
+    minedAmount: BigInt(Math.floor(parseFloat(epoch.mined) * 1e18)),
+    spent: BigInt(Math.floor(parseFloat(epoch.spent) * 1e18)),
+    earned: BigInt(Math.floor(parseFloat(epoch.earned) * 1e18)),
   };
 }
 
@@ -37,9 +39,9 @@ export function useMineHistory(
     queryKey: ["mineHistory", rigAddress, first, skip],
     queryFn: async () => {
       if (!rigAddress) return [];
-      const rawMines = await getMineHistory(rigAddress, first, skip);
+      const epochs = await getEpochs(rigAddress, first, skip);
       // Parse and reverse to get chronological order (oldest first for chat)
-      return rawMines.map(parseMineFromSubgraph).reverse();
+      return epochs.map(parseEpochToMineMessage).reverse();
     },
     enabled: !!rigAddress,
     staleTime: 10_000, // 10 seconds
@@ -68,8 +70,8 @@ export function useMineHistoryPaginated(
     queryKey: ["mineHistoryPaginated", rigAddress],
     queryFn: async () => {
       if (!rigAddress) return [];
-      const rawMines = await getMineHistory(rigAddress, pageSize, 0);
-      return rawMines.map(parseMineFromSubgraph).reverse();
+      const epochs = await getEpochs(rigAddress, pageSize, 0);
+      return epochs.map(parseEpochToMineMessage).reverse();
     },
     enabled: !!rigAddress,
     staleTime: 10_000,
