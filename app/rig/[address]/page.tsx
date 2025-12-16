@@ -121,17 +121,23 @@ export default function RigDetailPage() {
     reset: resetBatch,
   } = useBatchedTransaction();
 
-  // Trade balances
+  // Trade balances - watch for live updates
   const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
     address,
     chainId: DEFAULT_CHAIN_ID,
+    query: {
+      refetchInterval: 5000, // Poll every 5 seconds
+    },
   });
 
   const { data: unitBalanceData, refetch: refetchUnitBalance } = useBalance({
     address,
     token: rigInfo?.unitAddress as Address,
     chainId: DEFAULT_CHAIN_ID,
-    query: { enabled: !!rigInfo?.unitAddress },
+    query: {
+      enabled: !!rigInfo?.unitAddress,
+      refetchInterval: 5000, // Poll every 5 seconds
+    },
   });
 
   const refetchBalances = useCallback(() => {
@@ -376,11 +382,17 @@ export default function RigDetailPage() {
     if (swapSuccess && swapTxHash && swapTxHash !== lastProcessedSwapHash.current) {
       lastProcessedSwapHash.current = swapTxHash;
       setTradeAmount("");
-      // Refetch balances after a short delay to let RPC update
+      // Refetch immediately, then again after delays to handle RPC lag
+      refetchBalances();
+      refetchRigState();
       setTimeout(() => {
         refetchBalances();
         refetchRigState();
-      }, 1000);
+      }, 2000);
+      setTimeout(() => {
+        refetchBalances();
+        refetchRigState();
+      }, 5000);
       if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
       setTradeResult("success");
       tradeResultTimeoutRef.current = setTimeout(() => {
@@ -411,11 +423,17 @@ export default function RigDetailPage() {
     if (batchState === "success") {
       setTradeAmount("");
       resetBatch();
-      // Refetch balances after a short delay to let RPC update
+      // Refetch immediately, then again after delays to handle RPC lag
+      refetchBalances();
+      refetchRigState();
       setTimeout(() => {
         refetchBalances();
         refetchRigState();
-      }, 1000);
+      }, 2000);
+      setTimeout(() => {
+        refetchBalances();
+        refetchRigState();
+      }, 5000);
       if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
       setTradeResult("success");
       tradeResultTimeoutRef.current = setTimeout(() => {
