@@ -319,7 +319,6 @@ export default function LaunchPage() {
       tokenSymbol: tokenSymbol.trim().toUpperCase(),
       unitUri: uploadedMetadataUri,
       donutAmount: donutAmountBigInt,
-      teamAddress: targetAddress,
     };
 
     const launchCallData = encodeFunctionData({

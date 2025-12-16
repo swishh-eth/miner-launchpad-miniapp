@@ -131,7 +131,6 @@ export const MULTICALL_ABI = [
           { internalType: "string", name: "tokenSymbol", type: "string" },
           { internalType: "string", name: "unitUri", type: "string" },
           { internalType: "uint256", name: "donutAmount", type: "uint256" },
-          { internalType: "address", name: "teamAddress", type: "address" },
           { internalType: "uint256", name: "initialUps", type: "uint256" },
           { internalType: "uint256", name: "tailUps", type: "uint256" },
           { internalType: "uint256", name: "halvingPeriod", type: "uint256" },
@@ -545,7 +544,6 @@ export type LaunchParams = {
   tokenSymbol: string;
   unitUri: string;
   donutAmount: bigint;
-  teamAddress: `0x${string}`;
   initialUps: bigint;
   tailUps: bigint;
   halvingPeriod: bigint;
