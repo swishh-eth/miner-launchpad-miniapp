@@ -1083,9 +1083,7 @@ export default function RigDetailPage() {
                       disabled={isMineDisabled}
                       className={cn(
                         "w-[calc(50vw-16px)] max-w-[244px] py-2.5 rounded-lg font-semibold transition-all text-sm",
-                        mineResult === "success"
-                          ? "bg-green-500 text-black"
-                          : mineResult === "failure"
+                        mineResult === "failure"
                           ? "bg-zinc-700 text-white"
                           : "bg-pink-500 text-black hover:bg-pink-600 active:scale-[0.98]",
                         isMineDisabled && !mineResult && "opacity-40 cursor-not-allowed"
