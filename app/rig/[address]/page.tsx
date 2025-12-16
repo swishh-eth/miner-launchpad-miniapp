@@ -60,6 +60,46 @@ function LoadingDots() {
   );
 }
 
+// Mine history item with Neynar profile
+function MineHistoryItem({ mine, timeAgo }: { mine: { id: string; miner: string; uri: string; price: bigint; timestamp: number }; timeAgo: (ts: number) => string }) {
+  const { data: profile } = useQuery<{
+    user: { displayName: string | null; username: string | null; pfpUrl: string | null } | null;
+  }>({
+    queryKey: ["neynar-user", mine.miner],
+    queryFn: async () => {
+      const res = await fetch(`/api/neynar/user?address=${encodeURIComponent(mine.miner)}`);
+      if (!res.ok) return { user: null };
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000, // 5 minutes
+    retry: false,
+  });
+
+  const displayName = profile?.user?.displayName ?? profile?.user?.username ?? `${mine.miner.slice(0, 6)}...${mine.miner.slice(-4)}`;
+  const avatarUrl = profile?.user?.pfpUrl ?? `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(mine.miner.toLowerCase())}`;
+
+  return (
+    <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50">
+      <Avatar className="h-8 w-8 flex-shrink-0">
+        <AvatarImage src={avatarUrl} alt={displayName} />
+        <AvatarFallback className="bg-zinc-800 text-white text-xs">
+          {mine.miner.slice(2, 4).toUpperCase()}
+        </AvatarFallback>
+      </Avatar>
+      <div className="flex-1 min-w-0">
+        <div className="text-xs text-zinc-400">{displayName}</div>
+        {mine.uri && (
+          <div className="text-sm text-white mt-0.5 break-words">{mine.uri}</div>
+        )}
+      </div>
+      <div className="text-xs flex-shrink-0 text-right">
+        <div className="text-white">Ξ{Number(formatEther(mine.price)).toFixed(4)}</div>
+        <div className="text-zinc-500">{timeAgo(mine.timestamp)}</div>
+      </div>
+    </div>
+  );
+}
+
 const ipfsToGateway = (uri: string | undefined) => {
   if (!uri) return null;
   if (uri.startsWith("ipfs://")) {
@@ -1018,34 +1058,7 @@ export default function RigDetailPage() {
                 <div className="text-sm text-zinc-500">No mines yet</div>
               ) : (
                 [...mineHistory].reverse().map((mine) => (
-                  <div
-                    key={mine.id}
-                    className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50"
-                  >
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarImage
-                        src={`https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(mine.miner.toLowerCase())}`}
-                        alt={mine.miner}
-                      />
-                      <AvatarFallback className="bg-zinc-800 text-white text-xs">
-                        {mine.miner.slice(2, 4).toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="text-xs text-zinc-400">
-                        {mine.miner.slice(0, 6)}...{mine.miner.slice(-4)}
-                      </div>
-                      {mine.uri && (
-                        <div className="text-sm text-white mt-0.5 break-words">
-                          {mine.uri}
-                        </div>
-                      )}
-                    </div>
-                    <div className="text-xs flex-shrink-0 text-right">
-                      <div className="text-white">Ξ{Number(formatEther(mine.price)).toFixed(4)}</div>
-                      <div className="text-zinc-500">{timeAgo(mine.timestamp)}</div>
-                    </div>
-                  </div>
+                  <MineHistoryItem key={mine.id} mine={mine} timeAgo={timeAgo} />
                 ))
               )}
             </div>
