@@ -4,6 +4,7 @@ import { useEffect, useState } from "react";
 import Link from "next/link";
 import { formatEther } from "viem";
 import type { RigListItem } from "@/hooks/useAllRigs";
+import { cn } from "@/lib/utils";
 
 const formatEth = (value: bigint, maximumFractionDigits = 4) => {
   if (value === 0n) return "0";
@@ -30,9 +31,11 @@ const ipfsToGateway = (uri: string) => {
 type RigCardProps = {
   rig: RigListItem;
   ethUsdPrice?: number;
+  isTopBump?: boolean;
+  isNewBump?: boolean;
 };
 
-export function RigCard({ rig, ethUsdPrice = 3500 }: RigCardProps) {
+export function RigCard({ rig, ethUsdPrice = 3500, isTopBump = false, isNewBump = false }: RigCardProps) {
   const priceUsd = Number(formatEther(rig.price)) * ethUsdPrice;
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
 
@@ -57,7 +60,13 @@ export function RigCard({ rig, ethUsdPrice = 3500 }: RigCardProps) {
 
   return (
     <Link href={`/rig/${rig.address}`} className="block mb-1.5">
-      <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 transition-colors cursor-pointer">
+      <div
+        className={cn(
+          "flex items-center gap-3 p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 transition-colors cursor-pointer",
+          isNewBump && "animate-bump-enter",
+          isTopBump && !isNewBump && "animate-bump-glow"
+        )}
+      >
         {/* Token Logo */}
         <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center overflow-hidden">
           {logoUrl ? (

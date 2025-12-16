@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { Search } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -21,12 +21,37 @@ export default function ExplorePage() {
   const [sortBy, setSortBy] = useState<SortOption>("trending");
   const [searchQuery, setSearchQuery] = useState("");
   const [ethUsdPrice, setEthUsdPrice] = useState<number>(DEFAULT_ETH_PRICE_USD);
+  const [newBumpAddress, setNewBumpAddress] = useState<string | null>(null);
+  const prevTopRigRef = useRef<string | null>(null);
 
   // Farcaster context and wallet connection
   const { user, address } = useFarcaster();
 
   // Get rigs data
   const { rigs, isLoading } = useExploreRigs(sortBy, searchQuery, address);
+
+  // Track when a new rig bumps to the top
+  useEffect(() => {
+    if (sortBy !== "trending" || rigs.length === 0) {
+      prevTopRigRef.current = null;
+      setNewBumpAddress(null);
+      return;
+    }
+
+    const currentTopRig = rigs[0].address;
+
+    // If this is a different rig than before, it's a new bump
+    if (prevTopRigRef.current && prevTopRigRef.current !== currentTopRig) {
+      setNewBumpAddress(currentTopRig);
+      // Clear the "new" animation after it plays
+      const timer = setTimeout(() => {
+        setNewBumpAddress(null);
+      }, 3000);
+      return () => clearTimeout(timer);
+    }
+
+    prevTopRigRef.current = currentTopRig;
+  }, [rigs, sortBy]);
 
   // Fetch ETH price
   useEffect(() => {
@@ -120,8 +145,14 @@ export default function ExplorePage() {
                 </p>
               </div>
             ) : (
-              rigs.map((rig) => (
-                <RigCard key={rig.address} rig={rig} ethUsdPrice={ethUsdPrice} />
+              rigs.map((rig, index) => (
+                <RigCard
+                  key={rig.address}
+                  rig={rig}
+                  ethUsdPrice={ethUsdPrice}
+                  isTopBump={sortBy === "trending" && index === 0}
+                  isNewBump={rig.address === newBumpAddress}
+                />
               ))
             )}
           </div>

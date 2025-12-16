@@ -95,6 +95,9 @@ export function useRigList(
   first = 20,
   skip = 0
 ) {
+  // Poll more frequently for trending/bump to catch new mines
+  const refetchInterval = sortBy === "trending" ? 5_000 : 30_000;
+
   const { data: rigs, isLoading, error, refetch } = useQuery({
     queryKey: ["rigList", sortBy, first, skip],
     queryFn: async () => {
@@ -107,7 +110,8 @@ export function useRigList(
       // "new" - sort by createdAt
       return getRigs(first, skip, "createdAt", "desc");
     },
-    staleTime: 30_000,
+    staleTime: sortBy === "trending" ? 3_000 : 30_000,
+    refetchInterval,
     retry: false, // Don't retry - fallback to on-chain instead
   });
 
