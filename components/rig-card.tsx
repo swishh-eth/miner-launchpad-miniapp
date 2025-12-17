@@ -41,9 +41,9 @@ export function RigCard({ rig, ethUsdPrice = 3500, isTopBump = false, isNewBump 
 
   // Fetch metadata to get image URL
   useEffect(() => {
-    if (!rig.unitUri) return;
+    if (!rig.rigUri) return;
 
-    const metadataUrl = ipfsToGateway(rig.unitUri);
+    const metadataUrl = ipfsToGateway(rig.rigUri);
     if (!metadataUrl) return;
 
     fetch(metadataUrl)
@@ -56,7 +56,7 @@ export function RigCard({ rig, ethUsdPrice = 3500, isTopBump = false, isNewBump 
       .catch(() => {
         // Silently fail - will show fallback
       });
-  }, [rig.unitUri]);
+  }, [rig.rigUri]);
 
   return (
     <Link href={`/rig/${rig.address}`} className="block mb-1.5">

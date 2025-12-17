@@ -158,16 +158,16 @@ export default function RigDetailPage() {
     telegram?: string;
     discord?: string;
   }>({
-    queryKey: ["tokenMetadata", rigState?.unitUri],
+    queryKey: ["tokenMetadata", rigState?.rigUri],
     queryFn: async () => {
-      if (!rigState?.unitUri) return null;
-      const metadataUrl = ipfsToGateway(rigState.unitUri);
+      if (!rigState?.rigUri) return null;
+      const metadataUrl = ipfsToGateway(rigState.rigUri);
       if (!metadataUrl) return null;
       const response = await fetch(metadataUrl);
       if (!response.ok) return null;
       return response.json();
     },
-    enabled: !!rigState?.unitUri,
+    enabled: !!rigState?.rigUri,
     staleTime: STALE_TIME_PROFILE_MS,
     retry: false,
   });

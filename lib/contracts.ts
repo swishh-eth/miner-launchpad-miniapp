@@ -1,7 +1,7 @@
 export const CONTRACT_ADDRESSES = {
   // Core launchpad contracts
-  core: "0xe5BEd743C9B74537861eBD555e282b023c1d6069",
-  multicall: "0x21d30a9Fa2Eef611Dc42333C61c47018325531B1",
+  core: "0x93a563E603Ac501377c988ACC15AB540A97f88D3",
+  multicall: "0xbA0963e38D317877057523fA63624AAFde47744C",
   // Token addresses
   weth: "0x4200000000000000000000000000000000000006",
   donut: "0xae4a37d554c6d6f3e398546d8566b25052e0169c",
@@ -129,8 +129,9 @@ export const MULTICALL_ABI = [
           { internalType: "address", name: "launcher", type: "address" },
           { internalType: "string", name: "tokenName", type: "string" },
           { internalType: "string", name: "tokenSymbol", type: "string" },
-          { internalType: "string", name: "unitUri", type: "string" },
+          { internalType: "string", name: "uri", type: "string" },
           { internalType: "uint256", name: "donutAmount", type: "uint256" },
+          { internalType: "uint256", name: "unitAmount", type: "uint256" },
           { internalType: "uint256", name: "initialUps", type: "uint256" },
           { internalType: "uint256", name: "tailUps", type: "uint256" },
           { internalType: "uint256", name: "halvingPeriod", type: "uint256" },
@@ -149,6 +150,7 @@ export const MULTICALL_ABI = [
     ],
     name: "launch",
     outputs: [
+      { internalType: "address", name: "unit", type: "address" },
       { internalType: "address", name: "rig", type: "address" },
       { internalType: "address", name: "auction", type: "address" },
       { internalType: "address", name: "lpToken", type: "address" },
@@ -175,8 +177,8 @@ export const MULTICALL_ABI = [
           { internalType: "uint256", name: "nextUps", type: "uint256" },
           { internalType: "uint256", name: "unitPrice", type: "uint256" },
           { internalType: "address", name: "miner", type: "address" },
-          { internalType: "string", name: "uri", type: "string" },
-          { internalType: "string", name: "unitUri", type: "string" },
+          { internalType: "string", name: "epochUri", type: "string" },
+          { internalType: "string", name: "rigUri", type: "string" },
           { internalType: "uint256", name: "ethBalance", type: "uint256" },
           { internalType: "uint256", name: "wethBalance", type: "uint256" },
           { internalType: "uint256", name: "donutBalance", type: "uint256" },
@@ -517,8 +519,8 @@ export type RigState = {
   nextUps: bigint;
   unitPrice: bigint;
   miner: `0x${string}`;
-  uri: string;
-  unitUri: string;
+  epochUri: string;
+  rigUri: string;
   ethBalance: bigint;
   wethBalance: bigint;
   donutBalance: bigint;
@@ -542,8 +544,9 @@ export type LaunchParams = {
   launcher: `0x${string}`;
   tokenName: string;
   tokenSymbol: string;
-  unitUri: string;
+  uri: string;
   donutAmount: bigint;
+  unitAmount: bigint;
   initialUps: bigint;
   tailUps: bigint;
   halvingPeriod: bigint;
@@ -558,7 +561,8 @@ export type LaunchParams = {
 
 // Default launch parameters
 export const LAUNCH_DEFAULTS = {
-  unitUri: "", // metadata URI for the unit token (can be set later by team)
+  uri: "", // metadata URI for the unit token (can be set later by team)
+  unitAmount: BigInt("10000000000000000000"), // 10 tokens (10e18)
   initialUps: BigInt("4000000000000000000"), // 4 tokens/sec
   tailUps: BigInt("10000000000000000"), // 0.01 tokens/sec
   halvingPeriod: BigInt(30 * 24 * 60 * 60), // 30 days

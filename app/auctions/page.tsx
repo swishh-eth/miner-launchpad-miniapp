@@ -53,12 +53,12 @@ const ipfsToGateway = (uri: string) => {
 
 // LP Pair icon component - shows two overlapping token icons
 function LpPairIcon({
-  unitUri,
+  rigUri,
   tokenSymbol,
   size = "md",
   className
 }: {
-  unitUri?: string;
+  rigUri?: string;
   tokenSymbol?: string;
   size?: "sm" | "md";
   className?: string;
@@ -67,9 +67,9 @@ function LpPairIcon({
 
   // Fetch metadata to get image URL
   useEffect(() => {
-    if (!unitUri) return;
+    if (!rigUri) return;
 
-    const metadataUrl = ipfsToGateway(unitUri);
+    const metadataUrl = ipfsToGateway(rigUri);
     if (!metadataUrl) return;
 
     fetch(metadataUrl)
@@ -82,7 +82,7 @@ function LpPairIcon({
       .catch(() => {
         // Silently fail - will show fallback
       });
-  }, [unitUri]);
+  }, [rigUri]);
 
   const sizes = {
     sm: {
@@ -172,7 +172,7 @@ function AuctionCard({
     Number(formatEther(auction.auctionState.wethAccumulated)) * ethUsdPrice;
 
   const tokenSymbol = rigInfo?.tokenSymbol ?? "TOKEN";
-  const unitUri = rigState?.unitUri;
+  const rigUri = rigState?.rigUri;
 
   const isProfitable = wethValueUsd > lpPriceUsd;
 
@@ -193,7 +193,7 @@ function AuctionCard({
             YOU PAY
           </div>
           <div className="flex items-center gap-1.5 h-6">
-            <LpPairIcon unitUri={unitUri} tokenSymbol={tokenSymbol} />
+            <LpPairIcon rigUri={rigUri} tokenSymbol={tokenSymbol} />
             <span className="text-sm font-bold text-pink-500">
               {formatEth(auction.auctionState.price, 4)}
             </span>
@@ -399,7 +399,7 @@ export default function AuctionsPage() {
       selectedAuction.auctionState.price
     : true;
 
-  // Get token symbol and unitUri for selected auction (always call hooks, pass undefined if no selection)
+  // Get token symbol and rigUri for selected auction (always call hooks, pass undefined if no selection)
   const { rigInfo: selectedRigInfo } = useRigInfo(
     selectedAuctionAddress ?? undefined
   );
@@ -408,7 +408,7 @@ export default function AuctionsPage() {
     undefined
   );
   const selectedTokenSymbol = selectedRigInfo?.tokenSymbol ?? "TOKEN";
-  const selectedUnitUri = selectedRigState?.unitUri;
+  const selectedRigUri = selectedRigState?.rigUri;
 
   const isBuying = batchState === "pending" || batchState === "confirming";
 
@@ -522,7 +522,7 @@ export default function AuctionsPage() {
                     </a>
                   </div>
                   <div className="flex items-center gap-1.5">
-                    <LpPairIcon unitUri={selectedUnitUri} tokenSymbol={selectedTokenSymbol} />
+                    <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} />
                     <span className="text-lg font-semibold text-white">
                       {formatEth(selectedAuction.auctionState.price, 4)}
                     </span>
@@ -536,7 +536,7 @@ export default function AuctionsPage() {
                 <div className="text-right">
                   <div className="flex items-center justify-end gap-1 text-[10px] text-zinc-500 mb-1">
                     <span>Balance:</span>
-                    <LpPairIcon unitUri={selectedUnitUri} tokenSymbol={selectedTokenSymbol} size="sm" />
+                    <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} size="sm" />
                     <span className="text-white font-medium">
                       {formatEth(selectedAuction.auctionState.paymentTokenBalance, 4)}
                     </span>

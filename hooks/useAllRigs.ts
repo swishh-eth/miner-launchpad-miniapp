@@ -22,7 +22,7 @@ export type RigListItem = {
   unitAddress: `0x${string}`;
   tokenName: string;
   tokenSymbol: string;
-  unitUri: string;
+  rigUri: string;
   launcher: `0x${string}`;
   miner: `0x${string}`;
   price: bigint;
@@ -294,7 +294,7 @@ export function useExploreRigs(
         unitAddress: info?.unitAddress ?? zeroAddress,
         tokenName: info?.tokenName ?? "Unknown",
         tokenSymbol: info?.tokenSymbol ?? "???",
-        unitUri: onChainState?.unitUri ?? "",
+        rigUri: onChainState?.rigUri ?? "",
         launcher: zeroAddress, // Not available without subgraph
         miner: onChainState?.miner ?? zeroAddress,
         price: onChainState?.price ?? 0n,
@@ -322,7 +322,7 @@ export function useExploreRigs(
         unitAddress: subgraphRig.unit.toLowerCase() as `0x${string}`,
         tokenName: subgraphRig.tokenName,
         tokenSymbol: subgraphRig.tokenSymbol,
-        unitUri: onChainState?.unitUri ?? "",
+        rigUri: onChainState?.rigUri ?? "",
         launcher: subgraphRig.launcher.id.toLowerCase() as `0x${string}`,
         miner: onChainState?.miner ?? zeroAddress,
         price: onChainState?.price ?? 0n,
@@ -337,7 +337,7 @@ export function useExploreRigs(
 
   // Filter out rigs without valid metadata (must have ipfs:// URI)
   const filteredRigs = combinedRigs.filter(
-    (rig) => rig.unitUri && rig.unitUri.startsWith("ipfs://")
+    (rig) => rig.rigUri && rig.rigUri.startsWith("ipfs://")
   );
 
   // Loading until we have actual data ready to display

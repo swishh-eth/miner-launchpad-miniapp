@@ -317,7 +317,7 @@ export default function LaunchPage() {
       launcher: targetAddress,
       tokenName: tokenName.trim(),
       tokenSymbol: tokenSymbol.trim().toUpperCase(),
-      unitUri: uploadedMetadataUri,
+      uri: uploadedMetadataUri,
       donutAmount: donutAmountBigInt,
     };
 
