@@ -562,8 +562,8 @@ export const LAUNCH_DEFAULTS = {
   rigEpochPeriod: BigInt(60 * 60), // 1 hour
   rigPriceMultiplier: BigInt("2000000000000000000"), // 2x (2e18)
   rigMinInitPrice: BigInt("100000000000000"), // 0.0001 ETH
-  auctionInitPrice: BigInt("10000000000000000000"), // 10 LP tokens
+  auctionInitPrice: BigInt("1000000000000000000000"), // 1000 LP tokens
   auctionEpochPeriod: BigInt(24 * 60 * 60), // 24 hours
   auctionPriceMultiplier: BigInt("1200000000000000000"), // 1.2x (1.2e18)
-  auctionMinInitPrice: BigInt("10000000000000000000"), // 10 LP
+  auctionMinInitPrice: BigInt("1000000000000000000000"), // 1000 LP
 } as const;
