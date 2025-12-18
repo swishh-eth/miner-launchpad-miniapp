@@ -661,6 +661,36 @@ export default function RigDetailPage() {
     retry: false,
   });
 
+  // Fetch deployer/launcher profile
+  const launcherAddress = rigInfo?.launcher ?? zeroAddress;
+  const hasLauncher = launcherAddress !== zeroAddress;
+  const { data: launcherProfile } = useQuery<{
+    user: {
+      fid: number | null;
+      username: string | null;
+      displayName: string | null;
+      pfpUrl: string | null;
+    } | null;
+  }>({
+    queryKey: ["neynar-user", launcherAddress],
+    queryFn: async () => {
+      const res = await fetch(`/api/neynar/user?address=${encodeURIComponent(launcherAddress)}`);
+      if (!res.ok) return { user: null };
+      return res.json();
+    },
+    enabled: hasLauncher,
+    staleTime: STALE_TIME_PROFILE_MS,
+    retry: false,
+  });
+
+  const launcherDisplayName =
+    launcherProfile?.user?.displayName ??
+    launcherProfile?.user?.username ??
+    `${launcherAddress.slice(0, 6)}...${launcherAddress.slice(-4)}`;
+  const launcherAvatarUrl =
+    launcherProfile?.user?.pfpUrl ??
+    `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(launcherAddress.toLowerCase())}`;
+
   const minerDisplayName =
     minerProfile?.user?.displayName ??
     minerProfile?.user?.username ??
@@ -924,6 +954,18 @@ export default function RigDetailPage() {
           {/* About */}
           <div className="px-2 mt-6">
             <h2 className="text-base font-bold mb-3">About</h2>
+            {hasLauncher && (
+              <div className="flex items-center gap-2 mb-3">
+                <span className="text-sm text-zinc-500">Deployed by</span>
+                <Avatar className="h-5 w-5">
+                  <AvatarImage src={launcherAvatarUrl} alt={launcherDisplayName} />
+                  <AvatarFallback className="bg-zinc-800 text-white text-[8px]">
+                    {launcherAddress.slice(2, 4).toUpperCase()}
+                  </AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-medium text-white">{launcherDisplayName}</span>
+              </div>
+            )}
             <p className="text-sm text-zinc-400 mb-3">
               {tokenMetadata?.description || `${tokenName} is a token launched on the Miner Launchpad.`}
             </p>

@@ -1,7 +1,7 @@
 export const CONTRACT_ADDRESSES = {
   // Core launchpad contracts
-  core: "0xFFe2C14bF53fFf19b1FCE1d1095bE55b37ADE870",
-  multicall: "0xFaC5F4d494ae9fEfc354e66B8b0835fbe0321085",
+  core: "0x158Fdaf6b540DFC477448848cB0C28D9bcc7914C",
+  multicall: "0x796bc75fb33AaDe7D8FB7cfB1BF3C73B28e4F0B4",
   // Token addresses
   weth: "0x4200000000000000000000000000000000000006",
   donut: "0xae4a37d554c6d6f3e398546d8566b25052e0169c",
