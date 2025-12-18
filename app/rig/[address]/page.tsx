@@ -64,7 +64,7 @@ function LoadingDots() {
 }
 
 // Mine history item with Neynar profile
-function MineHistoryItem({ mine, timeAgo }: { mine: { id: string; miner: string; uri: string; price: bigint; timestamp: number }; timeAgo: (ts: number) => string }) {
+function MineHistoryItem({ mine, timeAgo }: { mine: { id: string; miner: string; uri: string; price: bigint; spent: bigint; timestamp: number }; timeAgo: (ts: number) => string }) {
   const { data: profile } = useQuery<{
     user: { displayName: string | null; username: string | null; pfpUrl: string | null } | null;
   }>({
