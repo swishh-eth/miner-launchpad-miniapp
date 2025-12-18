@@ -1,7 +1,7 @@
 export const CONTRACT_ADDRESSES = {
   // Core launchpad contracts
-  core: "0x93a563E603Ac501377c988ACC15AB540A97f88D3",
-  multicall: "0xbA0963e38D317877057523fA63624AAFde47744C",
+  core: "0xFFe2C14bF53fFf19b1FCE1d1095bE55b37ADE870",
+  multicall: "0xFaC5F4d494ae9fEfc354e66B8b0835fbe0321085",
   // Token addresses
   weth: "0x4200000000000000000000000000000000000006",
   donut: "0xae4a37d554c6d6f3e398546d8566b25052e0169c",
@@ -65,13 +65,6 @@ export const CORE_ABI = [
   {
     inputs: [],
     name: "minDonutForLaunch",
-    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
-    stateMutability: "view",
-    type: "function",
-  },
-  {
-    inputs: [],
-    name: "initialUnitMintAmount",
     outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
     stateMutability: "view",
     type: "function",
