@@ -457,23 +457,32 @@ export default function RigDetailPage() {
 
   // Share mining achievement handler
   const handleShareMine = useCallback(async () => {
-    if (!lastMineDetails || !rigInfo) return;
+    if (!rigInfo) return;
 
     const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
-    // Estimate mined amount based on mining rate (approximately what they'll get)
-    const estimatedMined = rigState?.nextUps
-      ? Number(formatUnits(rigState.nextUps * 60n, TOKEN_DECIMALS)).toFixed(0) // ~1 min of mining
-      : "some";
+
+    // Use current session mined amount or estimate from mining rate
+    const currentGlazed = interpolatedGlazed ?? rigState?.glazed ?? 0n;
+    const minedAmount = currentGlazed > 0n
+      ? Number(formatUnits(currentGlazed, TOKEN_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 0 })
+      : rigState?.nextUps
+        ? Number(formatUnits(rigState.nextUps * 60n, TOKEN_DECIMALS)).toFixed(0)
+        : "some";
+
+    // Use total spent from user stats
+    const spentAmount = userStats?.totalSpent
+      ? Number(formatEther(userStats.totalSpent)).toFixed(4)
+      : "0";
 
     await shareMiningAchievement({
       tokenSymbol: rigInfo.tokenSymbol || "TOKEN",
       tokenName: rigInfo.tokenName || "this token",
-      amountMined: estimatedMined,
-      priceSpent: lastMineDetails.priceSpent,
+      amountMined: minedAmount,
+      priceSpent: spentAmount,
       rigUrl,
-      message: lastMineDetails.message !== "gm" ? lastMineDetails.message : undefined,
+      message: customMessage && customMessage !== "gm" ? customMessage : undefined,
     });
-  }, [lastMineDetails, rigInfo, rigAddress, rigState?.nextUps]);
+  }, [rigInfo, rigAddress, rigState?.glazed, rigState?.nextUps, interpolatedGlazed, userStats?.totalSpent, customMessage]);
 
   // Trade handlers
   const handleTrade = useCallback(async () => {
