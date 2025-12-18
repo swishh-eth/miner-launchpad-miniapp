@@ -41,7 +41,7 @@ import {
   STALE_TIME_PROFILE_MS,
   DEADLINE_BUFFER_SECONDS,
   TOKEN_DECIMALS,
-  PINATA_GATEWAY,
+  ipfsToHttp,
 } from "@/lib/constants";
 
 const formatUsd = (value: number, compact = false) => {
@@ -103,17 +103,6 @@ function MineHistoryItem({ mine, timeAgo }: { mine: { id: string; miner: string;
   );
 }
 
-const ipfsToGateway = (uri: string | undefined) => {
-  if (!uri) return null;
-  if (uri.startsWith("ipfs://")) {
-    return `${PINATA_GATEWAY}/ipfs/${uri.slice(7)}`;
-  }
-  // Handle URLs without protocol (e.g., "domain.com/path") - prepend https://
-  if (!uri.startsWith("http://") && !uri.startsWith("https://") && uri.includes(".")) {
-    return `https://${uri}`;
-  }
-  return uri;
-};
 
 export default function RigDetailPage() {
   const params = useParams();
@@ -199,7 +188,7 @@ export default function RigDetailPage() {
     queryKey: ["tokenMetadata", rigState?.rigUri],
     queryFn: async () => {
       if (!rigState?.rigUri) return null;
-      const metadataUrl = ipfsToGateway(rigState.rigUri);
+      const metadataUrl = ipfsToHttp(rigState.rigUri);
       if (!metadataUrl) return null;
       const response = await fetch(metadataUrl);
       if (!response.ok) return null;
@@ -769,7 +758,7 @@ export default function RigDetailPage() {
     `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(minerAddress.toLowerCase())}`;
 
   // Token logo from metadata
-  const tokenLogoUrl = tokenMetadata?.image ? ipfsToGateway(tokenMetadata.image) : null;
+  const tokenLogoUrl = tokenMetadata?.image ? ipfsToHttp(tokenMetadata.image) : null;
 
   const formatTime = (seconds: number): string => {
     if (seconds < 0) return "0s";

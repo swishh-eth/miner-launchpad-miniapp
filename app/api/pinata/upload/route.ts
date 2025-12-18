@@ -2,7 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 
 const PINATA_API_KEY = process.env.PINATA_API_KEY;
 const PINATA_SECRET_KEY = process.env.PINATA_SECRET_KEY;
-const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY || "https://gateway.pinata.cloud";
+const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY || "https://glazecorp.mypinata.cloud";
+const PINATA_GATEWAY_KEY = process.env.NEXT_PUBLIC_PINATA_GATEWAY_KEY || "";
 
 export async function POST(request: NextRequest) {
   if (!PINATA_API_KEY || !PINATA_SECRET_KEY) {
@@ -101,7 +102,8 @@ export async function POST(request: NextRequest) {
     }
 
     const ipfsUrl = `ipfs://${cid}`;
-    const gatewayUrl = `${PINATA_GATEWAY}/ipfs/${cid}`;
+    const baseGatewayUrl = `${PINATA_GATEWAY}/ipfs/${cid}`;
+    const gatewayUrl = PINATA_GATEWAY_KEY ? `${baseGatewayUrl}?pinataGatewayToken=${PINATA_GATEWAY_KEY}` : baseGatewayUrl;
 
     console.log("Upload successful:", cid, "->", gatewayUrl);
 

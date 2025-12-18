@@ -5,6 +5,7 @@ import Link from "next/link";
 import { formatEther } from "viem";
 import type { RigListItem } from "@/hooks/useAllRigs";
 import { cn } from "@/lib/utils";
+import { ipfsToHttp } from "@/lib/constants";
 
 const formatEth = (value: bigint, maximumFractionDigits = 4) => {
   if (value === 0n) return "0";
@@ -15,21 +16,6 @@ const formatEth = (value: bigint, maximumFractionDigits = 4) => {
   return asNumber.toLocaleString(undefined, {
     maximumFractionDigits,
   });
-};
-
-// Convert ipfs:// URL to gateway URL
-const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY || "https://gateway.pinata.cloud";
-
-const ipfsToGateway = (uri: string) => {
-  if (!uri) return null;
-  if (uri.startsWith("ipfs://")) {
-    return `${PINATA_GATEWAY}/ipfs/${uri.slice(7)}`;
-  }
-  // Handle URLs without protocol (e.g., "domain.com/path") - prepend https://
-  if (!uri.startsWith("http://") && !uri.startsWith("https://") && uri.includes(".")) {
-    return `https://${uri}`;
-  }
-  return uri;
 };
 
 type RigCardProps = {
@@ -47,14 +33,14 @@ export function RigCard({ rig, ethUsdPrice = 3500, isTopBump = false, isNewBump 
   useEffect(() => {
     if (!rig.rigUri) return;
 
-    const metadataUrl = ipfsToGateway(rig.rigUri);
+    const metadataUrl = ipfsToHttp(rig.rigUri);
     if (!metadataUrl) return;
 
     fetch(metadataUrl)
       .then((res) => res.json())
       .then((metadata) => {
         if (metadata.image) {
-          setLogoUrl(ipfsToGateway(metadata.image));
+          setLogoUrl(ipfsToHttp(metadata.image));
         }
       })
       .catch(() => {

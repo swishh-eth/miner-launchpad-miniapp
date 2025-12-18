@@ -25,6 +25,7 @@ import {
   DEFAULT_ETH_PRICE_USD,
   DEFAULT_DONUT_PRICE_USD,
   PRICE_REFETCH_INTERVAL_MS,
+  ipfsToHttp,
 } from "@/lib/constants";
 
 const AUCTION_DEADLINE_BUFFER_SECONDS = 5 * 60;
@@ -40,20 +41,6 @@ const formatEth = (value: bigint, maximumFractionDigits = 4) => {
   });
 };
 
-// Convert ipfs:// URL to gateway URL
-const PINATA_GATEWAY = process.env.NEXT_PUBLIC_PINATA_GATEWAY || "https://gateway.pinata.cloud";
-
-const ipfsToGateway = (uri: string) => {
-  if (!uri) return null;
-  if (uri.startsWith("ipfs://")) {
-    return `${PINATA_GATEWAY}/ipfs/${uri.slice(7)}`;
-  }
-  // Handle URLs without protocol (e.g., "domain.com/path") - prepend https://
-  if (!uri.startsWith("http://") && !uri.startsWith("https://") && uri.includes(".")) {
-    return `https://${uri}`;
-  }
-  return uri;
-};
 
 // LP Pair icon component - shows two overlapping token icons
 function LpPairIcon({
@@ -73,14 +60,14 @@ function LpPairIcon({
   useEffect(() => {
     if (!rigUri) return;
 
-    const metadataUrl = ipfsToGateway(rigUri);
+    const metadataUrl = ipfsToHttp(rigUri);
     if (!metadataUrl) return;
 
     fetch(metadataUrl)
       .then((res) => res.json())
       .then((metadata) => {
         if (metadata.image) {
-          setLogoUrl(ipfsToGateway(metadata.image));
+          setLogoUrl(ipfsToHttp(metadata.image));
         }
       })
       .catch(() => {
