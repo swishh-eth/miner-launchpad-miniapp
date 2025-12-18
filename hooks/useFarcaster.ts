@@ -156,13 +156,12 @@ export async function shareMiningAchievement(options: {
   tokenSymbol: string;
   tokenName: string;
   amountMined: string;
-  priceSpent: string;
   rigUrl: string;
   message?: string;
 }): Promise<boolean> {
-  const { tokenSymbol, tokenName, amountMined, priceSpent, rigUrl, message } = options;
+  const { tokenSymbol, tokenName, amountMined, rigUrl, message } = options;
 
-  let text = `⛏️ Just mined ${amountMined} $${tokenSymbol} for ${priceSpent} ETH on ${tokenName}!`;
+  let text = `⛏️ Just mined ${amountMined} $${tokenSymbol} on ${tokenName}!`;
 
   if (message) {
     text += `\n\n"${message}"`;

@@ -469,20 +469,14 @@ export default function RigDetailPage() {
         ? Number(formatUnits(rigState.nextUps * 60n, TOKEN_DECIMALS)).toFixed(0)
         : "some";
 
-    // Use total spent from user stats
-    const spentAmount = userStats?.totalSpent
-      ? Number(formatEther(userStats.totalSpent)).toFixed(4)
-      : "0";
-
     await shareMiningAchievement({
       tokenSymbol: rigInfo.tokenSymbol || "TOKEN",
       tokenName: rigInfo.tokenName || "this token",
       amountMined: minedAmount,
-      priceSpent: spentAmount,
       rigUrl,
       message: customMessage && customMessage !== "gm" ? customMessage : undefined,
     });
-  }, [rigInfo, rigAddress, rigState?.glazed, rigState?.nextUps, interpolatedGlazed, userStats?.totalSpent, customMessage]);
+  }, [rigInfo, rigAddress, rigState?.glazed, rigState?.nextUps, interpolatedGlazed, customMessage]);
 
   // Trade handlers
   const handleTrade = useCallback(async () => {
