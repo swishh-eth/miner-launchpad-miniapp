@@ -1,23 +1,23 @@
 {
   "accountAssociation": {
     "header": "eyJmaWQiOjI3MjEwOSwidHlwZSI6ImF1dGgiLCJrZXkiOiIweDQ5REI1QTFjOWZlRjBFMkY5OTVCNDZiMEI3MWJFQmJEOTEyQkYwZTMifQ",
-    "payload": "eyJkb21haW4iOiJnbGF6ZWNvcnAtZnJhbmNoaXNlci52ZXJjZWwuYXBwIn0",
-    "signature": "33hZajbZ+JmfEBSfbKJ7Z5pXmdnTkq0M+cnpEEQJZ60fII1wBruWXeTgXe/ju0T2VTfKuNKMaO4C7UxFq1tikhw="
+    "payload": "eyJkb21haW4iOiJnbGF6ZWNvcnAtZnJhbmNoaXNlLnZlcmNlbC5hcHAifQ",
+    "signature": "NEEDS_REGENERATION"
   },
   "miniapp": {
     "version": "1",
     "name": "Franchiser",
     "tagline": "It Pays to Glaze!",
     "description": "Instantly deploy tokens as mining projects. Customize your settings and launch with the click of a button.",
-    "iconUrl": "https://glazecorp-franchiser.vercel.app/media/icon.png",
-    "homeUrl": "https://glazecorp-franchiser.vercel.app/",
-    "splashImageUrl": "https://glazecorp-franchiser.vercel.app/media/splash.png",
+    "iconUrl": "https://glazecorp-franchise.vercel.app/media/icon.png",
+    "homeUrl": "https://glazecorp-franchise.vercel.app/",
+    "splashImageUrl": "https://glazecorp-franchise.vercel.app/media/splash.png",
     "splashBackgroundColor": "#000000",
-    "heroImageUrl": "https://glazecorp-franchiser.vercel.app/media/hero.png",
+    "heroImageUrl": "https://glazecorp-franchise.vercel.app/media/hero.png",
     "buttonTitle": "Open a Franchise!",
     "ogTitle": "Franchiser, by Glaze Corp",
     "ogDescription": "Instantly Deploy Mining Tokens.",
-    "ogImageUrl": "https://glazecorp-franchiser.vercel.app/media/hero.png",
+    "ogImageUrl": "https://glazecorp-franchise.vercel.app/media/hero.png",
     "requiredChains": [
       "eip155:8453"
     ],

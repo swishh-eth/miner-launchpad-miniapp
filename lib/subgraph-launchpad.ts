@@ -529,6 +529,48 @@ export function formatSubgraphAddress(address: string): `0x${string}` {
   return address.toLowerCase() as `0x${string}`;
 }
 
+// Get top miners for a specific rig (leaderboard)
+export const GET_RIG_LEADERBOARD_QUERY = gql`
+  query GetRigLeaderboard($rigId: String!, $first: Int!) {
+    rigAccounts(
+      where: { rig_: { id: $rigId }, mined_gt: "0" }
+      orderBy: mined
+      orderDirection: desc
+      first: $first
+    ) {
+      id
+      rig {
+        id
+      }
+      account {
+        id
+      }
+      spent
+      earned
+      mined
+    }
+  }
+`;
+
+export async function getRigLeaderboard(
+  rigId: string,
+  first = 20
+): Promise<SubgraphRigAccount[]> {
+  try {
+    const data = await client.request<{ rigAccounts: SubgraphRigAccount[] }>(
+      GET_RIG_LEADERBOARD_QUERY,
+      {
+        rigId: rigId.toLowerCase(),
+        first,
+      }
+    );
+    return data.rigAccounts ?? [];
+  } catch (error) {
+    console.error("[getRigLeaderboard] Error:", error);
+    return [];
+  }
+}
+
 // Legacy compatibility - maps old function names to new ones
 export const getMineHistory = getEpochs;
 export const getUserRigStats = getRigAccount;

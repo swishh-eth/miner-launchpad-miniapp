@@ -3,7 +3,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowDownUp, Copy, Check } from "lucide-react";
+import { ArrowLeft, ArrowDownUp, Copy, Check, Share2 } from "lucide-react";
 import Link from "next/link";
 import {
   useBalance,
@@ -21,7 +21,10 @@ import { useRigState, useRigInfo } from "@/hooks/useRigState";
 import { useUserRigStats } from "@/hooks/useUserRigStats";
 import { usePriceHistory } from "@/hooks/usePriceHistory";
 import { useMineHistory } from "@/hooks/useMineHistory";
-import { useFarcaster } from "@/hooks/useFarcaster";
+import { useFarcaster, shareMiningAchievement } from "@/hooks/useFarcaster";
+import { useFriendActivity, getFriendActivityMessage } from "@/hooks/useFriendActivity";
+import { useRigLeaderboard } from "@/hooks/useRigLeaderboard";
+import { Leaderboard } from "@/components/leaderboard";
 import {
   useBatchedTransaction,
   encodeApproveCall,
@@ -122,6 +125,10 @@ export default function RigDetailPage() {
   const [selectedTimeframe, setSelectedTimeframe] = useState<"1D" | "1W" | "1M" | "ALL">("1D");
   const [showHeaderTicker, setShowHeaderTicker] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
+  const [lastMineDetails, setLastMineDetails] = useState<{
+    priceSpent: string;
+    message: string;
+  } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const priceRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
@@ -132,7 +139,7 @@ export default function RigDetailPage() {
   const [tradeAmount, setTradeAmount] = useState("");
 
   // Farcaster context and wallet connection
-  const { address, isConnected, connect } = useFarcaster();
+  const { address, isConnected, connect, user: farcasterUser } = useFarcaster();
 
   // Rig data
   const { rigState, refetch: refetchRigState } = useRigState(rigAddress, address);
@@ -145,6 +152,32 @@ export default function RigDetailPage() {
     : 0;
   const { priceHistory, pairData, lpAddress, isLoading: isLoadingPrice } = usePriceHistory(rigAddress, fallbackChartPrice, rigInfo?.unitAddress);
   const { mines: mineHistory } = useMineHistory(rigAddress, 10);
+
+  // Friend activity - get unique miner addresses and check for friends
+  const minerAddresses = useMemo(() => {
+    const uniqueAddrs = new Set<string>();
+    mineHistory.forEach(mine => uniqueAddrs.add(mine.miner));
+    if (rigState?.miner && rigState.miner !== "0x0000000000000000000000000000000000000000") {
+      uniqueAddrs.add(rigState.miner);
+    }
+    return Array.from(uniqueAddrs);
+  }, [mineHistory, rigState?.miner]);
+
+  const { data: friendActivity } = useFriendActivity(minerAddresses, farcasterUser?.fid);
+  const friendActivityMessage = friendActivity?.friends ? getFriendActivityMessage(friendActivity.friends) : null;
+
+  // Leaderboard with friend highlighting
+  const friendFids = useMemo(() => {
+    if (!friendActivity?.friends) return new Set<number>();
+    return new Set(friendActivity.friends.map(f => f.fid));
+  }, [friendActivity?.friends]);
+
+  const { entries: leaderboardEntries, userRank, isLoading: isLoadingLeaderboard } = useRigLeaderboard(
+    rigAddress,
+    address,
+    friendFids,
+    10
+  );
 
   // Fetch token metadata from IPFS (needed early for defaultMessage in mine)
   const { data: tokenMetadata } = useQuery<{
@@ -393,22 +426,50 @@ export default function RigDetailPage() {
       const price = rigState.price;
       const deadline = BigInt(Math.floor(Date.now() / 1000) + DEADLINE_BUFFER_SECONDS);
       const maxPrice = price === 0n ? 0n : (price * 105n) / 100n;
+      const messageToSend = customMessage.trim() || tokenMetadata?.defaultMessage || "gm";
+
+      // Store mine details for sharing after success
+      setLastMineDetails({
+        priceSpent: Number(formatEther(price)).toFixed(6),
+        message: messageToSend,
+      });
 
       await writeContract({
         account: targetAddress as Address,
         address: CONTRACT_ADDRESSES.multicall as Address,
         abi: MULTICALL_ABI,
         functionName: "mine",
-        args: [rigAddress, rigState.epochId, deadline, maxPrice, customMessage.trim() || tokenMetadata?.defaultMessage || "gm"],
+        args: [rigAddress, rigState.epochId, deadline, maxPrice, messageToSend],
         value: price,
         chainId: DEFAULT_CHAIN_ID,
       });
     } catch (error) {
       console.error("Failed to mine:", error);
       showMineResult("failure");
+      setLastMineDetails(null);
       resetWrite();
     }
   }, [address, connect, customMessage, rigState, rigAddress, resetMineResult, resetWrite, showMineResult, writeContract, tokenMetadata]);
+
+  // Share mining achievement handler
+  const handleShareMine = useCallback(async () => {
+    if (!lastMineDetails || !rigInfo) return;
+
+    const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
+    // Estimate mined amount based on mining rate (approximately what they'll get)
+    const estimatedMined = rigState?.nextUps
+      ? Number(formatUnits(rigState.nextUps * 60n, TOKEN_DECIMALS)).toFixed(0) // ~1 min of mining
+      : "some";
+
+    await shareMiningAchievement({
+      tokenSymbol: rigInfo.tokenSymbol || "TOKEN",
+      tokenName: rigInfo.tokenName || "this token",
+      amountMined: estimatedMined,
+      priceSpent: lastMineDetails.priceSpent,
+      rigUrl,
+      message: lastMineDetails.message !== "gm" ? lastMineDetails.message : undefined,
+    });
+  }, [lastMineDetails, rigInfo, rigAddress, rigState?.nextUps]);
 
   // Trade handlers
   const handleTrade = useCallback(async () => {
@@ -1092,6 +1153,38 @@ export default function RigDetailPage() {
             </div>
           </div>
 
+          {/* Leaderboard */}
+          <Leaderboard
+            entries={leaderboardEntries}
+            userRank={userRank}
+            tokenSymbol={tokenSymbol}
+            tokenName={tokenName}
+            rigUrl={`${typeof window !== 'undefined' ? window.location.origin : ''}/rig/${rigAddress}`}
+            isLoading={isLoadingLeaderboard}
+          />
+
+          {/* Friend Activity Banner */}
+          {friendActivityMessage && friendActivity?.friends && friendActivity.friends.length > 0 && (
+            <div className="px-2 mt-6">
+              <div className="flex items-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
+                <div className="flex -space-x-2">
+                  {friendActivity.friends.slice(0, 3).map((friend) => (
+                    <Avatar key={friend.fid} className="h-6 w-6 border-2 border-black">
+                      <AvatarImage
+                        src={friend.pfpUrl ?? `https://api.dicebear.com/7.x/shapes/svg?seed=${friend.fid}`}
+                        alt={friend.displayName || friend.username || "Friend"}
+                      />
+                      <AvatarFallback className="bg-zinc-800 text-white text-[8px]">
+                        {(friend.displayName || friend.username || "?").slice(0, 2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  ))}
+                </div>
+                <span className="text-sm text-purple-300">{friendActivityMessage}</span>
+              </div>
+            </div>
+          )}
+
           {/* Recent Mines */}
           <div className="px-2 mt-6">
             <h2 className="text-base font-bold mb-3">Recent mines</h2>
@@ -1134,19 +1227,30 @@ export default function RigDetailPage() {
                     <div className="text-[10px] text-zinc-500 mb-1">
                       Balance: Ξ{ethBalance.toFixed(4)}
                     </div>
-                    <button
-                      onClick={handleMine}
-                      disabled={isMineDisabled}
-                      className={cn(
-                        "w-[calc(50vw-16px)] max-w-[244px] py-2.5 rounded-lg font-semibold transition-all text-sm",
-                        mineResult === "failure"
-                          ? "bg-zinc-700 text-white"
-                          : "bg-purple-500 text-black hover:bg-purple-600 active:scale-[0.98]",
-                        isMineDisabled && !mineResult && "opacity-40 cursor-not-allowed"
+                    <div className="flex items-center gap-2 justify-end">
+                      {mineResult === "success" && lastMineDetails && (
+                        <button
+                          onClick={handleShareMine}
+                          className="p-2.5 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors"
+                          title="Share to Farcaster"
+                        >
+                          <Share2 className="w-5 h-5 text-purple-500" />
+                        </button>
                       )}
-                    >
-                      {buttonLabel}
-                    </button>
+                      <button
+                        onClick={handleMine}
+                        disabled={isMineDisabled}
+                        className={cn(
+                          "w-[calc(50vw-16px)] max-w-[244px] py-2.5 rounded-lg font-semibold transition-all text-sm",
+                          mineResult === "failure"
+                            ? "bg-zinc-700 text-white"
+                            : "bg-purple-500 text-black hover:bg-purple-600 active:scale-[0.98]",
+                          isMineDisabled && !mineResult && "opacity-40 cursor-not-allowed"
+                        )}
+                      >
+                        {buttonLabel}
+                      </button>
+                    </div>
                   </div>
                 </div>
               </>

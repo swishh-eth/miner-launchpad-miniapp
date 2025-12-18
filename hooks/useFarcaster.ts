@@ -126,3 +126,52 @@ export function initialsFrom(label?: string): string {
   if (!stripped) return label.slice(0, 2).toUpperCase();
   return stripped.slice(0, 2).toUpperCase();
 }
+
+/**
+ * Compose and share a cast to Farcaster
+ * Opens the native Farcaster compose UI with pre-filled text
+ */
+export async function composeCast(options: {
+  text: string;
+  embeds?: string[];
+}): Promise<boolean> {
+  try {
+    // SDK expects embeds as a tuple of 0-2 URLs: [] | [string] | [string, string]
+    const embedUrls = options.embeds?.slice(0, 2) as [] | [string] | [string, string] | undefined;
+    await sdk.actions.composeCast({
+      text: options.text,
+      embeds: embedUrls,
+    });
+    return true;
+  } catch (error) {
+    console.error("Failed to compose cast:", error);
+    return false;
+  }
+}
+
+/**
+ * Share a mining achievement to Farcaster
+ */
+export async function shareMiningAchievement(options: {
+  tokenSymbol: string;
+  tokenName: string;
+  amountMined: string;
+  priceSpent: string;
+  rigUrl: string;
+  message?: string;
+}): Promise<boolean> {
+  const { tokenSymbol, tokenName, amountMined, priceSpent, rigUrl, message } = options;
+
+  let text = `⛏️ Just mined ${amountMined} $${tokenSymbol} for ${priceSpent} ETH on ${tokenName}!`;
+
+  if (message) {
+    text += `\n\n"${message}"`;
+  }
+
+  text += `\n\nMine with me 👇`;
+
+  return composeCast({
+    text,
+    embeds: [rigUrl],
+  });
+}
