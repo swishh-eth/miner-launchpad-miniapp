@@ -4,7 +4,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import { useReadContract } from "wagmi";
 import { parseEther, formatEther, type Address, encodeFunctionData } from "viem";
-import { Upload, X, Plus, Minus } from "lucide-react";
+import { Upload, X, Plus, Minus, Share2, PartyPopper } from "lucide-react";
 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -17,7 +17,7 @@ import {
   LAUNCH_DEFAULTS,
 } from "@/lib/contracts";
 import { getDonutPrice } from "@/lib/utils";
-import { useFarcaster, getUserDisplayName, getUserHandle, initialsFrom } from "@/hooks/useFarcaster";
+import { useFarcaster, getUserDisplayName, getUserHandle, initialsFrom, shareLaunch } from "@/hooks/useFarcaster";
 import { useBatchedTransaction, encodeApproveCall, type Call } from "@/hooks/useBatchedTransaction";
 import { DEFAULT_CHAIN_ID, DEFAULT_DONUT_PRICE_USD, PRICE_REFETCH_INTERVAL_MS, STALE_TIME_SHORT_MS } from "@/lib/constants";
 
@@ -55,6 +55,8 @@ export default function LaunchPage() {
   const launchResultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(
     null
   );
+  const [showSuccessModal, setShowSuccessModal] = useState(false);
+  const [launchedToken, setLaunchedToken] = useState<{ name: string; symbol: string } | null>(null);
 
   // Farcaster context and wallet connection
   const { user, address, isConnected, connect } = useFarcaster();
@@ -133,15 +135,15 @@ export default function LaunchPage() {
       showLaunchResult("success");
       setTxStep("idle");
       resetBatch();
-      setTimeout(() => {
-        router.push("/explore");
-      }, 2000);
+      // Save launched token info and show success modal
+      setLaunchedToken({ name: tokenName, symbol: tokenSymbol });
+      setShowSuccessModal(true);
     } else if (batchState === "error") {
       showLaunchResult("failure");
       setTxStep("idle");
       resetBatch();
     }
-  }, [batchState, showLaunchResult, resetBatch, router]);
+  }, [batchState, showLaunchResult, resetBatch, tokenName, tokenSymbol]);
 
   // Handle logo selection (just preview, don't upload yet)
   const handleLogoSelect = useCallback(
@@ -588,6 +590,48 @@ export default function LaunchPage() {
           </div>
         </div>
       </div>
+
+      {/* Success Modal */}
+      {showSuccessModal && launchedToken && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm">
+          <div className="bg-zinc-900 rounded-2xl p-6 mx-4 max-w-sm w-full text-center">
+            <div className="flex justify-center mb-4">
+              <div className="w-16 h-16 rounded-full bg-purple-500/20 flex items-center justify-center">
+                <PartyPopper className="w-8 h-8 text-purple-400" />
+              </div>
+            </div>
+            <h2 className="text-xl font-bold mb-2">Franchise Opened!</h2>
+            <p className="text-zinc-400 mb-6">
+              <span className="text-white font-semibold">${launchedToken.symbol}</span> ({launchedToken.name}) is now live!
+            </p>
+            <div className="flex flex-col gap-3">
+              <button
+                onClick={async () => {
+                  await shareLaunch({
+                    tokenSymbol: launchedToken.symbol,
+                    tokenName: launchedToken.name,
+                    appUrl: window.location.origin,
+                  });
+                }}
+                className="flex items-center justify-center gap-2 w-full py-3 rounded-xl bg-purple-500 text-black font-semibold hover:bg-purple-400 transition-colors"
+              >
+                <Share2 className="w-4 h-4" />
+                Share on Farcaster
+              </button>
+              <button
+                onClick={() => {
+                  setShowSuccessModal(false);
+                  router.push("/explore");
+                }}
+                className="w-full py-3 rounded-xl bg-zinc-800 text-white font-semibold hover:bg-zinc-700 transition-colors"
+              >
+                View Tokens
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
       <NavBar />
     </main>
   );

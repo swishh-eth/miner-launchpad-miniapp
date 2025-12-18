@@ -174,3 +174,21 @@ export async function shareMiningAchievement(options: {
     embeds: [rigUrl],
   });
 }
+
+/**
+ * Share a new token launch to Farcaster
+ */
+export async function shareLaunch(options: {
+  tokenSymbol: string;
+  tokenName: string;
+  appUrl: string;
+}): Promise<boolean> {
+  const { tokenSymbol, tokenName, appUrl } = options;
+
+  const text = `🎉 Just opened a franchise!\n\n$${tokenSymbol} (${tokenName}) is now live.\n\nCome mine with me 👇`;
+
+  return composeCast({
+    text,
+    embeds: [appUrl],
+  });
+}
