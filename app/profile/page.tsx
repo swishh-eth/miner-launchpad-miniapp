@@ -149,13 +149,8 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabOption>("mined");
   const [donutUsdPrice, setDonutUsdPrice] = useState<number>(DEFAULT_DONUT_PRICE_USD);
 
-  const { user, address, isConnected } = useFarcaster();
+  const { user, address } = useFarcaster();
   const { minedRigs, launchedRigs, isLoading } = useUserProfile(address);
-
-  // Debug: log address to help troubleshoot
-  useEffect(() => {
-    console.log("[Profile] address:", address, "isConnected:", isConnected);
-  }, [address, isConnected]);
 
   // Fetch DONUT price
   useEffect(() => {
@@ -250,7 +245,7 @@ export default function ProfilePage() {
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto scrollbar-hide">
-            {!user ? null : !isConnected ? (
+            {!user ? null : !address ? (
               <div className="flex flex-col items-center justify-center h-32 text-center text-gray-500">
                 <p className="text-lg font-semibold">Wallet not connected</p>
                 <p className="text-sm mt-1">Please connect your wallet to see your rigs</p>
