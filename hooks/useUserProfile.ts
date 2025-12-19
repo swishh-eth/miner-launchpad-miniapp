@@ -32,7 +32,9 @@ export type UserLaunchedRig = {
   address: `0x${string}`;
   tokenName: string;
   tokenSymbol: string;
+  rigUri: string;
   totalMinted: bigint;
+  unitPrice: bigint; // price in DONUT
   revenue: bigint;
 };
 
@@ -130,16 +132,42 @@ export function useUserProfile(accountAddress: `0x${string}` | undefined) {
     };
   }).filter((rig) => rig.rigUri && rig.rigUri.startsWith("ipfs://"));
 
-  // Process launched rigs
-  const launchedRigs: UserLaunchedRig[] = (accountData?.rigsLaunched ?? []).map((rig: SubgraphRig) => ({
-    address: rig.id.toLowerCase() as `0x${string}`,
-    tokenName: rig.tokenName,
-    tokenSymbol: rig.tokenSymbol,
-    totalMinted: BigInt(Math.floor(parseFloat(rig.minted) * 1e18)),
-    revenue: BigInt(Math.floor(parseFloat(rig.revenue) * 1e18)),
+  // Get launched rig addresses for on-chain state
+  const launchedRigAddresses = (accountData?.rigsLaunched ?? [])
+    .map((rig: SubgraphRig) => rig.id.toLowerCase() as `0x${string}`);
+
+  // Fetch on-chain states for launched rigs
+  const launchedContracts = launchedRigAddresses.map((address) => ({
+    address: CONTRACT_ADDRESSES.multicall as `0x${string}`,
+    abi: MULTICALL_ABI,
+    functionName: "getRig" as const,
+    args: [address, accountAddress ?? zeroAddress] as const,
+    chainId: base.id,
   }));
 
-  const isLoading = isLoadingAccount || isLoadingRigAccounts || isLoadingRigDetails || isLoadingStates;
+  const { data: launchedRigStates, isLoading: isLoadingLaunchedStates } = useReadContracts({
+    contracts: launchedContracts,
+    query: {
+      enabled: launchedRigAddresses.length > 0,
+      refetchInterval: 30_000,
+    },
+  });
+
+  // Process launched rigs with on-chain data
+  const launchedRigs: UserLaunchedRig[] = (accountData?.rigsLaunched ?? []).map((rig: SubgraphRig, index: number) => {
+    const state = launchedRigStates?.[index]?.result as RigState | undefined;
+    return {
+      address: rig.id.toLowerCase() as `0x${string}`,
+      tokenName: rig.tokenName,
+      tokenSymbol: rig.tokenSymbol,
+      rigUri: state?.rigUri ?? "",
+      totalMinted: BigInt(Math.floor(parseFloat(rig.minted) * 1e18)),
+      unitPrice: state?.unitPrice ?? 0n,
+      revenue: BigInt(Math.floor(parseFloat(rig.revenue) * 1e18)),
+    };
+  });
+
+  const isLoading = isLoadingAccount || isLoadingRigAccounts || isLoadingRigDetails || isLoadingStates || isLoadingLaunchedStates;
 
   return {
     minedRigs,

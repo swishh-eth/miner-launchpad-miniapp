@@ -8,8 +8,8 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { NavBar } from "@/components/nav-bar";
 import { useFarcaster, getUserDisplayName, getUserHandle, initialsFrom } from "@/hooks/useFarcaster";
 import { useUserProfile, type UserRigData, type UserLaunchedRig } from "@/hooks/useUserProfile";
-import { cn, getEthPrice } from "@/lib/utils";
-import { DEFAULT_ETH_PRICE_USD, PRICE_REFETCH_INTERVAL_MS, ipfsToHttp } from "@/lib/constants";
+import { cn, getDonutPrice } from "@/lib/utils";
+import { DEFAULT_DONUT_PRICE_USD, PRICE_REFETCH_INTERVAL_MS, ipfsToHttp } from "@/lib/constants";
 
 type TabOption = "mined" | "launched";
 
@@ -70,11 +70,8 @@ function MinedRigCard({ rig }: { rig: UserRigData }) {
           <div className="text-sm font-semibold text-purple-500">
             {formatTokenAmount(rig.userMined)} mined
           </div>
-          <div className={cn(
-            "text-xs",
-            rig.userEarned >= rig.userSpent ? "text-green-500" : "text-red-500"
-          )}>
-            {rig.userEarned >= rig.userSpent ? "+" : ""}{formatTokenAmount(rig.userEarned - rig.userSpent, 4)} ETH
+          <div className="text-xs text-gray-500">
+            {formatTokenAmount(rig.userEarned - rig.userSpent, 4)} ETH pnl
           </div>
         </div>
       </div>
@@ -82,14 +79,50 @@ function MinedRigCard({ rig }: { rig: UserRigData }) {
   );
 }
 
-function LaunchedRigCard({ rig }: { rig: UserLaunchedRig }) {
+function LaunchedRigCard({ rig, donutUsdPrice }: { rig: UserLaunchedRig; donutUsdPrice: number }) {
+  const [logoUrl, setLogoUrl] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!rig.rigUri) return;
+    const metadataUrl = ipfsToHttp(rig.rigUri);
+    if (!metadataUrl) return;
+
+    fetch(metadataUrl)
+      .then((res) => res.json())
+      .then((metadata) => {
+        if (metadata.image) {
+          setLogoUrl(ipfsToHttp(metadata.image));
+        }
+      })
+      .catch(() => {});
+  }, [rig.rigUri]);
+
+  // Calculate market cap: totalMinted * unitPrice (in DONUT) * donutUsdPrice
+  const marketCapUsd = rig.unitPrice > 0n
+    ? Number(formatEther(rig.totalMinted)) * Number(formatEther(rig.unitPrice)) * donutUsdPrice
+    : 0;
+
+  const formatUsd = (value: number) => {
+    if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
+    if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
+    return `$${value.toFixed(2)}`;
+  };
+
   return (
     <Link href={`/rig/${rig.address}`} className="block mb-1.5">
       <div className="flex items-center gap-3 p-3 rounded-xl bg-zinc-900 hover:bg-zinc-800 transition-colors cursor-pointer">
         <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-zinc-800 flex items-center justify-center overflow-hidden">
-          <span className="text-purple-500 font-bold text-lg">
-            {rig.tokenSymbol.slice(0, 2)}
-          </span>
+          {logoUrl ? (
+            <img
+              src={logoUrl}
+              alt={rig.tokenSymbol}
+              className="w-12 h-12 object-cover rounded-xl"
+            />
+          ) : (
+            <span className="text-purple-500 font-bold text-lg">
+              {rig.tokenSymbol.slice(0, 2)}
+            </span>
+          )}
         </div>
         <div className="flex-1 min-w-0">
           <div className="font-semibold text-white truncate">
@@ -101,7 +134,7 @@ function LaunchedRigCard({ rig }: { rig: UserLaunchedRig }) {
         </div>
         <div className="flex-shrink-0 text-right">
           <div className="text-sm font-semibold text-purple-500">
-            {formatTokenAmount(rig.totalMinted)} minted
+            {formatUsd(marketCapUsd)} mcap
           </div>
           <div className="text-xs text-gray-500">
             {formatTokenAmount(rig.revenue, 4)} ETH revenue
@@ -114,9 +147,21 @@ function LaunchedRigCard({ rig }: { rig: UserLaunchedRig }) {
 
 export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabOption>("mined");
+  const [donutUsdPrice, setDonutUsdPrice] = useState<number>(DEFAULT_DONUT_PRICE_USD);
 
   const { user, address } = useFarcaster();
   const { minedRigs, launchedRigs, isLoading } = useUserProfile(address);
+
+  // Fetch DONUT price
+  useEffect(() => {
+    const fetchPrice = async () => {
+      const price = await getDonutPrice();
+      setDonutUsdPrice(price);
+    };
+    fetchPrice();
+    const interval = setInterval(fetchPrice, PRICE_REFETCH_INTERVAL_MS);
+    return () => clearInterval(interval);
+  }, []);
 
   const userDisplayName = getUserDisplayName(user);
   const userHandle = getUserHandle(user);
@@ -139,7 +184,7 @@ export default function ProfilePage() {
 
           {/* User Info */}
           {user ? (
-            <div className="flex items-center gap-3 mb-4 p-3 rounded-xl bg-zinc-900">
+            <div className="flex items-center gap-3 mb-4 px-1">
               <Avatar className="h-14 w-14 border-2 border-purple-500">
                 <AvatarImage
                   src={userAvatarUrl || undefined}
@@ -217,7 +262,7 @@ export default function ProfilePage() {
               </div>
             ) : (
               launchedRigs.map((rig) => (
-                <LaunchedRigCard key={rig.address} rig={rig} />
+                <LaunchedRigCard key={rig.address} rig={rig} donutUsdPrice={donutUsdPrice} />
               ))
             )}
           </div>
