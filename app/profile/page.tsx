@@ -70,8 +70,11 @@ function MinedRigCard({ rig }: { rig: UserRigData }) {
           <div className="text-sm font-semibold text-purple-500">
             {formatTokenAmount(rig.userMined)} mined
           </div>
-          <div className="text-xs text-gray-500">
-            {formatTokenAmount(rig.userEarned, 4)} ETH earned
+          <div className={cn(
+            "text-xs",
+            rig.userEarned >= rig.userSpent ? "text-green-500" : "text-red-500"
+          )}>
+            {rig.userEarned >= rig.userSpent ? "+" : ""}{formatTokenAmount(rig.userEarned - rig.userSpent, 4)} ETH
           </div>
         </div>
       </div>
@@ -162,7 +165,7 @@ export default function ProfilePage() {
 
           {/* Stats/Tabs */}
           {user && (
-            <div className="grid grid-cols-2 gap-2 mb-3">
+            <div className="grid grid-cols-2 gap-2 mb-3 px-0.5">
               <button
                 onClick={() => setActiveTab("mined")}
                 className={cn(
