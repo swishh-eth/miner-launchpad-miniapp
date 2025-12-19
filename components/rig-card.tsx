@@ -94,7 +94,7 @@ export function RigCard({ rig, donutUsdPrice = 0.01, isTopBump = false, isNewBum
         {/* Price & Market Cap */}
         <div className="flex-shrink-0 text-right">
           <div className="text-sm font-semibold text-purple-500">
-            {formatEth(rig.price, 5)} ETH
+            Ξ{formatEth(rig.price, 5)}
           </div>
           <div className="text-xs text-gray-500">
             {formatUsd(marketCapUsd)} mcap
