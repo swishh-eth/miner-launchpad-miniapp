@@ -31,6 +31,20 @@ import {
 
 const AUCTION_DEADLINE_BUFFER_SECONDS = 5 * 60;
 
+// Animated dots component for loading states
+function AnimatedDots() {
+  const [dots, setDots] = useState("");
+
+  useEffect(() => {
+    const interval = setInterval(() => {
+      setDots((prev) => (prev.length >= 3 ? "" : prev + "."));
+    }, 400);
+    return () => clearInterval(interval);
+  }, []);
+
+  return <span className="inline-block w-4 text-left">{dots}</span>;
+}
+
 const formatEth = (value: bigint, maximumFractionDigits = 4) => {
   if (value === 0n) return "0";
   const asNumber = Number(formatEther(value));
@@ -480,7 +494,7 @@ export default function AuctionsPage() {
   const donutReserve = reserves ? (isUnitToken0 ? reserves[1] : reserves[0]) : 0n;
 
   // Read user's UNIT and DONUT balances
-  const { data: userUnitBalance } = useBalance({
+  const { data: userUnitBalance, refetch: refetchUnitBalance } = useBalance({
     address: address,
     token: unitAddress,
     chainId: base.id,
@@ -490,7 +504,7 @@ export default function AuctionsPage() {
     },
   });
 
-  const { data: userDonutBalance } = useBalance({
+  const { data: userDonutBalance, refetch: refetchDonutBalance } = useBalance({
     address: address,
     token: CONTRACT_ADDRESSES.donut as Address,
     chainId: base.id,
@@ -529,18 +543,26 @@ export default function AuctionsPage() {
   const hasInsufficientUnitBalance = parsedUnitAmount > 0n && (userUnitBalance?.value ?? 0n) < parsedUnitAmount;
   const hasInsufficientDonutBalance = requiredDonut > 0n && (userDonutBalance?.value ?? 0n) < requiredDonut;
 
+  // Helper to refetch all balances
+  const refetchBalances = useCallback(() => {
+    refetchUnitBalance();
+    refetchDonutBalance();
+    refetchAuctions();
+  }, [refetchUnitBalance, refetchDonutBalance, refetchAuctions]);
+
   // Handle LP creation batch transaction completion
   useEffect(() => {
     if (lpBatchState === "success") {
       setLpUnitAmount("");
       resetLpBatch();
-      // Refetch auction data
-      setTimeout(() => refetchAuctions(), 1000);
-      setTimeout(() => refetchAuctions(), 3000);
+      // Refetch balances and auction data with delays
+      setTimeout(() => refetchBalances(), 1000);
+      setTimeout(() => refetchBalances(), 3000);
+      setTimeout(() => refetchBalances(), 6000);
     } else if (lpBatchState === "error") {
       resetLpBatch();
     }
-  }, [lpBatchState, refetchAuctions, resetLpBatch]);
+  }, [lpBatchState, refetchBalances, resetLpBatch]);
 
   const handleCreateLp = useCallback(async () => {
     if (!address || !unitAddress || !lpTokenAddress || parsedUnitAmount === 0n || requiredDonut === 0n) {
@@ -733,11 +755,14 @@ export default function AuctionsPage() {
                         onClick={() => selectedAuction && handleBuy(selectedAuction)}
                         disabled={isBuying || hasInsufficientBalance}
                       >
-                        {isBuying
-                          ? batchState === "confirming"
-                            ? "CONFIRMING..."
-                            : "BUYING..."
-                          : "BUY"}
+                        {isBuying ? (
+                          <>
+                            {batchState === "confirming" ? "CONFIRMING" : "BUYING"}
+                            <AnimatedDots />
+                          </>
+                        ) : (
+                          "BUY"
+                        )}
                       </Button>
                     </div>
                   </div>
@@ -832,15 +857,18 @@ export default function AuctionsPage() {
                         hasInsufficientDonutBalance
                       }
                     >
-                      {isCreatingLp
-                        ? lpBatchState === "confirming"
-                          ? "CONFIRMING..."
-                          : "CREATING..."
-                        : hasInsufficientUnitBalance
-                          ? `INSUFFICIENT ${selectedTokenSymbol}`
-                          : hasInsufficientDonutBalance
-                            ? "INSUFFICIENT DONUT"
-                            : "CREATE LP"}
+                      {isCreatingLp ? (
+                        <>
+                          {lpBatchState === "confirming" ? "CONFIRMING" : "CREATING"}
+                          <AnimatedDots />
+                        </>
+                      ) : hasInsufficientUnitBalance ? (
+                        `INSUFFICIENT ${selectedTokenSymbol}`
+                      ) : hasInsufficientDonutBalance ? (
+                        "INSUFFICIENT DONUT"
+                      ) : (
+                        "CREATE LP"
+                      )}
                     </Button>
                   </>
                 ) : (
