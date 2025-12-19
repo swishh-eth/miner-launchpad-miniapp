@@ -303,8 +303,14 @@ export default function AuctionsPage() {
   useEffect(() => {
     if (batchState === "success") {
       setPendingAuction(null);
-      refetchAuctions();
       resetBatch();
+      // Refetch with delays to ensure RPC has updated state
+      const refetchWithDelays = () => {
+        setTimeout(() => refetchAuctions(), 1000);
+        setTimeout(() => refetchAuctions(), 3000);
+        setTimeout(() => refetchAuctions(), 6000);
+      };
+      refetchWithDelays();
     } else if (batchState === "error") {
       setPendingAuction(null);
       resetBatch();
