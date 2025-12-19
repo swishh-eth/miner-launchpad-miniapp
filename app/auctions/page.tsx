@@ -94,9 +94,9 @@ function LpPairIcon({
   const fallbackLetter = tokenSymbol ? tokenSymbol.charAt(0).toUpperCase() : "?";
 
   return (
-    <div className={cn("relative flex items-center", className)}>
+    <div className={cn("relative flex items-center isolate", className)}>
       {/* Unit token (left/front) */}
-      <div className={cn(s.unit, "rounded-full bg-zinc-800 flex items-center justify-center overflow-hidden z-20")}>
+      <div className={cn(s.unit, "rounded-full bg-zinc-800 flex items-center justify-center overflow-hidden z-[2]")}>
         {logoUrl ? (
           <img
             src={logoUrl}
@@ -108,7 +108,7 @@ function LpPairIcon({
         )}
       </div>
       {/* DONUT token (right/back) - donut shape, behind unit */}
-      <div className={cn(s.donut, "rounded-full bg-purple-500 flex items-center justify-center z-10")}>
+      <div className={cn(s.donut, "rounded-full bg-purple-500 flex items-center justify-center z-[1]")}>
         <div className={cn(s.donutHole, "rounded-full bg-black")} />
       </div>
     </div>
