@@ -149,8 +149,13 @@ export default function ProfilePage() {
   const [activeTab, setActiveTab] = useState<TabOption>("mined");
   const [donutUsdPrice, setDonutUsdPrice] = useState<number>(DEFAULT_DONUT_PRICE_USD);
 
-  const { user, address } = useFarcaster();
+  const { user, address, isConnected } = useFarcaster();
   const { minedRigs, launchedRigs, isLoading } = useUserProfile(address);
+
+  // Debug: log address to help troubleshoot
+  useEffect(() => {
+    console.log("[Profile] address:", address, "isConnected:", isConnected);
+  }, [address, isConnected]);
 
   // Fetch DONUT price
   useEffect(() => {
@@ -200,6 +205,11 @@ export default function ProfilePage() {
                 {userHandle ? (
                   <div className="text-sm text-gray-400">{userHandle}</div>
                 ) : null}
+                {address && (
+                  <div className="text-xs text-gray-600 font-mono">
+                    {address.slice(0, 6)}...{address.slice(-4)}
+                  </div>
+                )}
               </div>
             </div>
           ) : (
@@ -240,7 +250,12 @@ export default function ProfilePage() {
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto scrollbar-hide">
-            {!user ? null : isLoading ? (
+            {!user ? null : !isConnected ? (
+              <div className="flex flex-col items-center justify-center h-32 text-center text-gray-500">
+                <p className="text-lg font-semibold">Wallet not connected</p>
+                <p className="text-sm mt-1">Please connect your wallet to see your rigs</p>
+              </div>
+            ) : isLoading ? (
               <div className="flex flex-col items-center justify-center h-32 text-gray-500">
                 <p className="text-sm">Loading...</p>
               </div>
