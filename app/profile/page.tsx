@@ -137,7 +137,7 @@ function LaunchedRigCard({ rig, donutUsdPrice }: { rig: UserLaunchedRig; donutUs
             {formatUsd(marketCapUsd)} mcap
           </div>
           <div className="text-xs text-gray-500">
-            {formatTokenAmount(rig.revenue, 4)} ETH revenue
+            {formatTokenAmount(rig.revenue, 4)} ETH earned
           </div>
         </div>
       </div>
