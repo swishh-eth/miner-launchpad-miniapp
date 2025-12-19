@@ -160,45 +160,35 @@ export default function ProfilePage() {
             </div>
           )}
 
-          {/* Stats Summary */}
-          {user && !isLoading && (
-            <div className="grid grid-cols-2 gap-2 mb-4">
-              <div className="p-3 rounded-xl bg-zinc-900 text-center">
+          {/* Stats/Tabs */}
+          {user && (
+            <div className="grid grid-cols-2 gap-2 mb-3">
+              <button
+                onClick={() => setActiveTab("mined")}
+                className={cn(
+                  "p-3 rounded-xl text-center transition-colors",
+                  activeTab === "mined"
+                    ? "bg-purple-500/20 ring-2 ring-purple-500"
+                    : "bg-zinc-900 hover:bg-zinc-800"
+                )}
+              >
                 <div className="text-2xl font-bold text-purple-500">{minedRigs.length}</div>
                 <div className="text-xs text-gray-500">Rigs Mined</div>
-              </div>
-              <div className="p-3 rounded-xl bg-zinc-900 text-center">
+              </button>
+              <button
+                onClick={() => setActiveTab("launched")}
+                className={cn(
+                  "p-3 rounded-xl text-center transition-colors",
+                  activeTab === "launched"
+                    ? "bg-purple-500/20 ring-2 ring-purple-500"
+                    : "bg-zinc-900 hover:bg-zinc-800"
+                )}
+              >
                 <div className="text-2xl font-bold text-purple-500">{launchedRigs.length}</div>
                 <div className="text-xs text-gray-500">Rigs Launched</div>
-              </div>
+            </button>
             </div>
           )}
-
-          {/* Tabs */}
-          <div className="flex gap-1 mb-3">
-            <button
-              onClick={() => setActiveTab("mined")}
-              className={cn(
-                "flex-1 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors",
-                activeTab === "mined"
-                  ? "bg-purple-500 text-black"
-                  : "bg-zinc-900 text-gray-400 hover:text-white"
-              )}
-            >
-              Mined ({minedRigs.length})
-            </button>
-            <button
-              onClick={() => setActiveTab("launched")}
-              className={cn(
-                "flex-1 py-1.5 px-3 rounded-lg text-sm font-semibold transition-colors",
-                activeTab === "launched"
-                  ? "bg-purple-500 text-black"
-                  : "bg-zinc-900 text-gray-400 hover:text-white"
-              )}
-            >
-              Launched ({launchedRigs.length})
-            </button>
-          </div>
 
           {/* Content */}
           <div className="flex-1 overflow-y-auto scrollbar-hide">
