@@ -130,7 +130,7 @@ export function useUserProfile(accountAddress: `0x${string}` | undefined) {
       userSpent: BigInt(Math.floor(parseFloat(ra.spent) * 1e18)),
       userEarned: BigInt(Math.floor(parseFloat(ra.earned) * 1e18)),
     };
-  }).filter((rig) => rig.rigUri && rig.rigUri.startsWith("ipfs://"));
+  });
 
   // Get launched rig addresses for on-chain state
   const launchedRigAddresses = (accountData?.rigsLaunched ?? [])
