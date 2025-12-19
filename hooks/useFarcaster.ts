@@ -17,12 +17,14 @@ export type FarcasterContext = {
   user?: FarcasterUser;
 };
 
+// Session storage key for tracking auto-connect attempts
+const AUTO_CONNECT_KEY = "farcaster_auto_connect_attempted";
+
 /**
  * Hook to manage Farcaster Mini App context, SDK ready state, and wallet auto-connection
  */
 export function useFarcaster() {
   const readyRef = useRef(false);
-  const autoConnectAttempted = useRef(false);
   const [context, setContext] = useState<FarcasterContext | null>(null);
 
   const { address, isConnected } = useAccount();
@@ -61,17 +63,25 @@ export function useFarcaster() {
     return () => clearTimeout(timeout);
   }, []);
 
-  // Auto-connect wallet
+  // Auto-connect wallet (only once per session)
   useEffect(() => {
+    // Check if we already attempted this session
+    const alreadyAttempted = typeof window !== "undefined" && sessionStorage.getItem(AUTO_CONNECT_KEY);
+
     if (
-      autoConnectAttempted.current ||
+      alreadyAttempted ||
       isConnected ||
       !primaryConnector ||
       isConnecting
     ) {
       return;
     }
-    autoConnectAttempted.current = true;
+
+    // Mark as attempted in sessionStorage
+    if (typeof window !== "undefined") {
+      sessionStorage.setItem(AUTO_CONNECT_KEY, "true");
+    }
+
     connectAsync({
       connector: primaryConnector,
       chainId: base.id,
