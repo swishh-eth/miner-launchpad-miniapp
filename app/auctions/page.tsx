@@ -2,7 +2,9 @@
 
 import { useCallback, useEffect, useMemo, useState } from "react";
 import { Flame } from "lucide-react";
-import { formatEther, type Address } from "viem";
+import { formatEther, parseEther, parseUnits, formatUnits, type Address, zeroAddress } from "viem";
+import { useReadContracts, useBalance } from "wagmi";
+import { base } from "wagmi/chains";
 
 import { Button } from "@/components/ui/button";
 import { NavBar } from "@/components/nav-bar";
@@ -18,7 +20,7 @@ import {
   encodeApproveCall,
   encodeContractCall,
 } from "@/hooks/useBatchedTransaction";
-import { CONTRACT_ADDRESSES, MULTICALL_ABI } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES, MULTICALL_ABI, UNIV2_PAIR_ABI, UNIV2_ROUTER_ABI, CORE_ABI, ERC20_ABI } from "@/lib/contracts";
 import { cn, getEthPrice, getDonutPrice } from "@/lib/utils";
 import {
   DEFAULT_ETH_PRICE_USD,
@@ -213,6 +215,8 @@ function AuctionCard({
   );
 }
 
+type AuctionMode = "buy" | "get";
+
 export default function AuctionsPage() {
   const [ethUsdPrice, setEthUsdPrice] = useState<number>(DEFAULT_ETH_PRICE_USD);
   const [donutUsdPrice, setDonutUsdPrice] = useState<number>(DEFAULT_DONUT_PRICE_USD);
@@ -220,9 +224,18 @@ export default function AuctionsPage() {
   const [pendingAuction, setPendingAuction] = useState<AuctionListItem | null>(
     null
   );
+  const [mode, setMode] = useState<AuctionMode>("buy");
+  const [lpUnitAmount, setLpUnitAmount] = useState("");
 
   // Farcaster context and wallet connection
   const { address, isConnected, connect } = useFarcaster();
+
+  // LP Maker: Batched transaction hook for approve + approve + addLiquidity
+  const {
+    execute: executeLpBatch,
+    state: lpBatchState,
+    reset: resetLpBatch,
+  } = useBatchedTransaction();
 
   // Batched transaction hook for approve + buy
   const {
@@ -404,6 +417,201 @@ export default function AuctionsPage() {
 
   const isBuying = batchState === "pending" || batchState === "confirming";
 
+  // LP Maker: Get UNIT token address for selected auction
+  const lpTokenAddress = selectedAuction?.auctionState.paymentToken;
+
+  // Read UNIT address from Core contract (rigToUnit mapping)
+  const { data: unitAddressResult } = useReadContracts({
+    contracts: selectedAuctionAddress ? [{
+      address: CONTRACT_ADDRESSES.core as Address,
+      abi: CORE_ABI,
+      functionName: "rigToUnit",
+      args: [selectedAuctionAddress],
+      chainId: base.id,
+    }] : [],
+    query: {
+      enabled: !!selectedAuctionAddress,
+    },
+  });
+  const unitAddress = unitAddressResult?.[0]?.result as Address | undefined;
+
+  // Read LP pair info (token0, token1, reserves)
+  const { data: lpPairInfo } = useReadContracts({
+    contracts: lpTokenAddress ? [
+      {
+        address: lpTokenAddress,
+        abi: UNIV2_PAIR_ABI,
+        functionName: "token0",
+        chainId: base.id,
+      },
+      {
+        address: lpTokenAddress,
+        abi: UNIV2_PAIR_ABI,
+        functionName: "token1",
+        chainId: base.id,
+      },
+      {
+        address: lpTokenAddress,
+        abi: UNIV2_PAIR_ABI,
+        functionName: "getReserves",
+        chainId: base.id,
+      },
+      {
+        address: lpTokenAddress,
+        abi: UNIV2_PAIR_ABI,
+        functionName: "totalSupply",
+        chainId: base.id,
+      },
+    ] : [],
+    query: {
+      enabled: !!lpTokenAddress,
+      refetchInterval: 30_000,
+    },
+  });
+
+  const token0 = lpPairInfo?.[0]?.result as Address | undefined;
+  const token1 = lpPairInfo?.[1]?.result as Address | undefined;
+  const reserves = lpPairInfo?.[2]?.result as [bigint, bigint, number] | undefined;
+  const lpTotalSupply = lpPairInfo?.[3]?.result as bigint | undefined;
+
+  // Determine which token is UNIT and which is DONUT
+  const isUnitToken0 = unitAddress && token0 && unitAddress.toLowerCase() === token0.toLowerCase();
+  const unitReserve = reserves ? (isUnitToken0 ? reserves[0] : reserves[1]) : 0n;
+  const donutReserve = reserves ? (isUnitToken0 ? reserves[1] : reserves[0]) : 0n;
+
+  // Read user's UNIT and DONUT balances
+  const { data: userUnitBalance } = useBalance({
+    address: address,
+    token: unitAddress,
+    chainId: base.id,
+    query: {
+      enabled: !!address && !!unitAddress,
+      refetchInterval: 15_000,
+    },
+  });
+
+  const { data: userDonutBalance } = useBalance({
+    address: address,
+    token: CONTRACT_ADDRESSES.donut as Address,
+    chainId: base.id,
+    query: {
+      enabled: !!address,
+      refetchInterval: 15_000,
+    },
+  });
+
+  // Calculate required DONUT based on UNIT input
+  const parsedUnitAmount = useMemo(() => {
+    if (!lpUnitAmount || isNaN(Number(lpUnitAmount))) return 0n;
+    try {
+      return parseEther(lpUnitAmount);
+    } catch {
+      return 0n;
+    }
+  }, [lpUnitAmount]);
+
+  const requiredDonut = useMemo(() => {
+    if (parsedUnitAmount === 0n || unitReserve === 0n || donutReserve === 0n) return 0n;
+    // DONUT needed = (UNIT amount * DONUT reserve) / UNIT reserve
+    // Add 0.5% buffer for slippage
+    const exactDonut = (parsedUnitAmount * donutReserve) / unitReserve;
+    return (exactDonut * 1005n) / 1000n;
+  }, [parsedUnitAmount, unitReserve, donutReserve]);
+
+  // Calculate estimated LP tokens to receive
+  const estimatedLpTokens = useMemo(() => {
+    if (parsedUnitAmount === 0n || unitReserve === 0n || !lpTotalSupply) return 0n;
+    // LP tokens = (UNIT amount / UNIT reserve) * total LP supply
+    return (parsedUnitAmount * lpTotalSupply) / unitReserve;
+  }, [parsedUnitAmount, unitReserve, lpTotalSupply]);
+
+  // Check if user has sufficient balances
+  const hasInsufficientUnitBalance = parsedUnitAmount > 0n && (userUnitBalance?.value ?? 0n) < parsedUnitAmount;
+  const hasInsufficientDonutBalance = requiredDonut > 0n && (userDonutBalance?.value ?? 0n) < requiredDonut;
+
+  // Handle LP creation batch transaction completion
+  useEffect(() => {
+    if (lpBatchState === "success") {
+      setLpUnitAmount("");
+      resetLpBatch();
+      // Refetch auction data
+      setTimeout(() => refetchAuctions(), 1000);
+      setTimeout(() => refetchAuctions(), 3000);
+    } else if (lpBatchState === "error") {
+      resetLpBatch();
+    }
+  }, [lpBatchState, refetchAuctions, resetLpBatch]);
+
+  const handleCreateLp = useCallback(async () => {
+    if (!address || !unitAddress || !lpTokenAddress || parsedUnitAmount === 0n || requiredDonut === 0n) {
+      return;
+    }
+
+    // Connect wallet if not connected
+    if (!isConnected) {
+      try {
+        await connect();
+        return;
+      } catch {
+        return;
+      }
+    }
+
+    const deadline = BigInt(Math.floor(Date.now() / 1000) + AUCTION_DEADLINE_BUFFER_SECONDS);
+
+    // Calculate min amounts with 1% slippage tolerance
+    const minUnitAmount = (parsedUnitAmount * 99n) / 100n;
+    const minDonutAmount = (requiredDonut * 99n) / 100n;
+
+    // Build batched calls: approve UNIT + approve DONUT + addLiquidity
+    const approveUnitCall = encodeApproveCall(
+      unitAddress,
+      CONTRACT_ADDRESSES.uniV2Router as Address,
+      parsedUnitAmount
+    );
+
+    const approveDonutCall = encodeApproveCall(
+      CONTRACT_ADDRESSES.donut as Address,
+      CONTRACT_ADDRESSES.uniV2Router as Address,
+      requiredDonut
+    );
+
+    const addLiquidityCall = encodeContractCall(
+      CONTRACT_ADDRESSES.uniV2Router as Address,
+      UNIV2_ROUTER_ABI,
+      "addLiquidity",
+      [
+        unitAddress, // tokenA (UNIT)
+        CONTRACT_ADDRESSES.donut, // tokenB (DONUT)
+        parsedUnitAmount, // amountADesired
+        requiredDonut, // amountBDesired
+        minUnitAmount, // amountAMin
+        minDonutAmount, // amountBMin
+        address, // to (LP tokens go to user)
+        deadline, // deadline
+      ]
+    );
+
+    try {
+      await executeLpBatch([approveUnitCall, approveDonutCall, addLiquidityCall]);
+    } catch (error) {
+      console.error("LP creation failed:", error);
+      resetLpBatch();
+    }
+  }, [
+    address,
+    isConnected,
+    connect,
+    unitAddress,
+    lpTokenAddress,
+    parsedUnitAmount,
+    requiredDonut,
+    executeLpBatch,
+    resetLpBatch,
+  ]);
+
+  const isCreatingLp = lpBatchState === "pending" || lpBatchState === "confirming";
+
   return (
     <main className="flex h-screen w-screen justify-center overflow-hidden bg-black font-mono text-white">
       <div
@@ -415,8 +623,14 @@ export default function AuctionsPage() {
       >
         <div className="flex flex-1 flex-col overflow-hidden">
         {/* Header */}
-        <div className="mb-2">
+        <div className="flex items-center justify-between mb-2">
           <h1 className="text-2xl font-bold tracking-wide">AUCTIONS</h1>
+          <button
+            onClick={() => setMode(mode === "buy" ? "get" : "buy")}
+            className="px-3 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-600 transition-colors text-black text-xs font-semibold"
+          >
+            {mode === "buy" ? "GET" : "BUY"}
+          </button>
         </div>
 
         {/* Auction Cards List */}
@@ -444,91 +658,200 @@ export default function AuctionsPage() {
         </div>
 
         {/* Fixed Bottom Action Bar */}
-        {selectedAuction && (
-          <div className="fixed bottom-0 left-0 right-0 bg-black">
-            <div className="max-w-[520px] mx-auto px-2 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+72px)]">
-              {/* PnL Indicator */}
-              <div
-                className={cn(
-                  "rounded-lg px-3 py-2 mb-3 text-center",
-                  selectedProfitLoss > 0.01
-                    ? "bg-green-500/20 border border-green-500/50"
-                    : selectedProfitLoss >= -0.01
-                      ? "bg-yellow-500/20 border border-yellow-500/50"
-                      : "bg-red-500/20 border border-red-500/50"
-                )}
-              >
-                {selectedProfitLoss > 0.01 ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="text-green-400 font-semibold">GOOD DEAL</span>
-                    <span className="text-green-300 text-sm">
-                      +${selectedProfitLoss.toFixed(2)} profit
-                    </span>
-                  </div>
-                ) : selectedProfitLoss >= -0.01 ? (
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="text-yellow-400 font-semibold">BREAK EVEN</span>
-                  </div>
-                ) : (
-                  <div className="flex items-center justify-center gap-2">
-                    <span className="text-red-400 font-semibold">WARNING</span>
-                    <span className="text-red-300 text-sm">
-                      -${Math.abs(selectedProfitLoss).toFixed(2)} loss
-                    </span>
-                  </div>
-                )}
-              </div>
-
-              <div className="flex items-center justify-between gap-4">
-                {/* Auction Price */}
-                <div className="flex-1">
-                  <div className="flex items-center gap-2 text-xs text-zinc-500">
-                    <span>Auction price</span>
-                    <a
-                      href={`https://app.uniswap.org/explore/pools/base/${selectedAuction.auctionState.paymentToken}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-purple-500 hover:text-purple-400"
-                    >
-                      Get LP
-                    </a>
-                  </div>
-                  <div className="flex items-center gap-1.5">
-                    <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} />
-                    <span className="text-lg font-semibold text-white">
-                      {formatEth(selectedAuction.auctionState.price, 4)}
-                    </span>
-                  </div>
-                  <div className="text-xs text-zinc-600">
-                    ~${selectedLpPriceUsd.toFixed(2)}
-                  </div>
-                </div>
-
-                {/* Balance and Button */}
-                <div className="text-right">
-                  <div className="flex items-center justify-end gap-1 text-[10px] text-zinc-500 mb-1">
-                    <span>Balance:</span>
-                    <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} size="sm" />
-                    <span className="text-white font-medium">
-                      {formatEth(selectedAuction.auctionState.paymentTokenBalance, 4)}
-                    </span>
-                  </div>
-                  <Button
-                    className="w-[calc(50vw-16px)] max-w-[244px] py-2.5 text-sm font-semibold rounded-lg bg-purple-500 hover:bg-purple-600 text-black"
-                    onClick={() => selectedAuction && handleBuy(selectedAuction)}
-                    disabled={isBuying || hasInsufficientBalance}
+        <div className="fixed bottom-0 left-0 right-0 bg-black">
+          <div className="max-w-[520px] mx-auto px-2 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+72px)]">
+            {mode === "buy" ? (
+              /* Buy Mode - Auction interface */
+              selectedAuction ? (
+                <>
+                  {/* PnL Indicator */}
+                  <div
+                    className={cn(
+                      "rounded-lg px-3 py-2 mb-3 text-center",
+                      selectedProfitLoss > 0.01
+                        ? "bg-green-500/20 border border-green-500/50"
+                        : selectedProfitLoss >= -0.01
+                          ? "bg-yellow-500/20 border border-yellow-500/50"
+                          : "bg-red-500/20 border border-red-500/50"
+                    )}
                   >
-                    {isBuying
-                      ? batchState === "confirming"
-                        ? "CONFIRMING..."
-                        : "BUYING..."
-                      : "BUY"}
-                  </Button>
-                </div>
+                    {selectedProfitLoss > 0.01 ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-green-400 font-semibold">GOOD DEAL</span>
+                        <span className="text-green-300 text-sm">
+                          +${selectedProfitLoss.toFixed(2)} profit
+                        </span>
+                      </div>
+                    ) : selectedProfitLoss >= -0.01 ? (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-yellow-400 font-semibold">BREAK EVEN</span>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-center gap-2">
+                        <span className="text-red-400 font-semibold">WARNING</span>
+                        <span className="text-red-300 text-sm">
+                          -${Math.abs(selectedProfitLoss).toFixed(2)} loss
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center justify-between gap-4">
+                    {/* Auction Price */}
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-xs text-zinc-500">
+                        <span>Auction price</span>
+                        <button
+                          onClick={() => setMode("get")}
+                          className="text-purple-500 hover:text-purple-400"
+                        >
+                          Get LP
+                        </button>
+                      </div>
+                      <div className="flex items-center gap-1.5">
+                        <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} />
+                        <span className="text-lg font-semibold text-white">
+                          {formatEth(selectedAuction.auctionState.price, 4)}
+                        </span>
+                      </div>
+                      <div className="text-xs text-zinc-600">
+                        ~${selectedLpPriceUsd.toFixed(2)}
+                      </div>
+                    </div>
+
+                    {/* Balance and Button */}
+                    <div className="text-right">
+                      <div className="flex items-center justify-end gap-1 text-[10px] text-zinc-500 mb-1">
+                        <span>Balance:</span>
+                        <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} size="sm" />
+                        <span className="text-white font-medium">
+                          {formatEth(selectedAuction.auctionState.paymentTokenBalance, 4)}
+                        </span>
+                      </div>
+                      <Button
+                        className="w-[calc(50vw-16px)] max-w-[244px] py-2.5 text-sm font-semibold rounded-lg bg-purple-500 hover:bg-purple-600 text-black"
+                        onClick={() => selectedAuction && handleBuy(selectedAuction)}
+                        disabled={isBuying || hasInsufficientBalance}
+                      >
+                        {isBuying
+                          ? batchState === "confirming"
+                            ? "CONFIRMING..."
+                            : "BUYING..."
+                          : "BUY"}
+                      </Button>
+                    </div>
+                  </div>
+                </>
+              ) : null
+            ) : (
+              /* Get Mode - LP Maker interface */
+              <div className="space-y-3">
+                {selectedAuction ? (
+                  <>
+                    {/* UNIT Input */}
+                    <div className="bg-zinc-900 rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider">You provide</div>
+                        <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+                          <span>Balance:</span>
+                          <span className={cn(
+                            "font-medium",
+                            hasInsufficientUnitBalance ? "text-red-400" : "text-white"
+                          )}>
+                            {formatEth(userUnitBalance?.value ?? 0n, 2)}
+                          </span>
+                          <button
+                            onClick={() => userUnitBalance?.value && setLpUnitAmount(formatEther(userUnitBalance.value))}
+                            className="text-purple-500 hover:text-purple-400 ml-1"
+                          >
+                            MAX
+                          </button>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <input
+                          type="text"
+                          inputMode="decimal"
+                          placeholder="0.0"
+                          value={lpUnitAmount}
+                          onChange={(e) => setLpUnitAmount(e.target.value)}
+                          className="flex-1 bg-transparent text-xl font-bold text-white focus:outline-none placeholder:text-zinc-600"
+                        />
+                        <div className="flex items-center gap-2 px-2 py-1 bg-zinc-800 rounded-lg">
+                          <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} size="sm" />
+                          <span className="text-sm font-medium text-white">{selectedTokenSymbol}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* DONUT Required */}
+                    <div className="bg-zinc-900 rounded-xl p-3">
+                      <div className="flex items-center justify-between mb-1">
+                        <div className="text-[10px] text-zinc-500 uppercase tracking-wider">Required DONUT</div>
+                        <div className="flex items-center gap-1 text-[10px] text-zinc-500">
+                          <span>Balance:</span>
+                          <span className={cn(
+                            "font-medium",
+                            hasInsufficientDonutBalance ? "text-red-400" : "text-white"
+                          )}>
+                            {formatEth(userDonutBalance?.value ?? 0n, 2)}
+                          </span>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-3">
+                        <span className="flex-1 text-xl font-bold text-white">
+                          {requiredDonut > 0n ? formatEth(requiredDonut, 2) : "0.0"}
+                        </span>
+                        <div className="flex items-center gap-2 px-2 py-1 bg-zinc-800 rounded-lg">
+                          <div className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center">
+                            <div className="w-1.5 h-1.5 rounded-full bg-black" />
+                          </div>
+                          <span className="text-sm font-medium text-white">DONUT</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Estimated LP Output */}
+                    <div className="flex items-center justify-between px-2 text-xs text-zinc-500">
+                      <span>You receive ~</span>
+                      <div className="flex items-center gap-1">
+                        <LpPairIcon rigUri={selectedRigUri} tokenSymbol={selectedTokenSymbol} size="sm" />
+                        <span className="text-white font-medium">{formatEth(estimatedLpTokens, 4)}</span>
+                        <span>LP tokens</span>
+                      </div>
+                    </div>
+
+                    {/* Create LP Button */}
+                    <Button
+                      className="w-full py-3 text-sm font-semibold rounded-lg bg-purple-500 hover:bg-purple-600 text-black disabled:bg-purple-500/50 disabled:cursor-not-allowed"
+                      onClick={handleCreateLp}
+                      disabled={
+                        isCreatingLp ||
+                        parsedUnitAmount === 0n ||
+                        hasInsufficientUnitBalance ||
+                        hasInsufficientDonutBalance
+                      }
+                    >
+                      {isCreatingLp
+                        ? lpBatchState === "confirming"
+                          ? "CONFIRMING..."
+                          : "CREATING..."
+                        : hasInsufficientUnitBalance
+                          ? `INSUFFICIENT ${selectedTokenSymbol}`
+                          : hasInsufficientDonutBalance
+                            ? "INSUFFICIENT DONUT"
+                            : "CREATE LP"}
+                    </Button>
+                  </>
+                ) : (
+                  <div className="text-center text-sm text-zinc-500 py-8">
+                    Select an auction above to create LP tokens
+                  </div>
+                )}
               </div>
-            </div>
+            )}
           </div>
-        )}
+        </div>
         </div>
       </div>
       <NavBar />

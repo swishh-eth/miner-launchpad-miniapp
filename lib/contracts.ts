@@ -6,6 +6,9 @@ export const CONTRACT_ADDRESSES = {
   weth: "0x4200000000000000000000000000000000000006",
   donut: "0xae4a37d554c6d6f3e398546d8566b25052e0169c",
   usdc: "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913",
+  // Uniswap V2 on Base
+  uniV2Router: "0x4752ba5dbc23f44d87826276bf6fd6b1c372ad24",
+  uniV2Factory: "0x8909Dc15e40173Ff4699343b6eB8132c65e18eC6",
 } as const;
 
 // Native ETH placeholder address used by 0x API
@@ -567,3 +570,63 @@ export const LAUNCH_DEFAULTS = {
   auctionPriceMultiplier: BigInt("1200000000000000000"), // 1.2x (1.2e18)
   auctionMinInitPrice: BigInt("1000000000000000000000"), // 1000 LP
 } as const;
+
+// Uniswap V2 Router ABI (only addLiquidity)
+export const UNIV2_ROUTER_ABI = [
+  {
+    inputs: [
+      { internalType: "address", name: "tokenA", type: "address" },
+      { internalType: "address", name: "tokenB", type: "address" },
+      { internalType: "uint256", name: "amountADesired", type: "uint256" },
+      { internalType: "uint256", name: "amountBDesired", type: "uint256" },
+      { internalType: "uint256", name: "amountAMin", type: "uint256" },
+      { internalType: "uint256", name: "amountBMin", type: "uint256" },
+      { internalType: "address", name: "to", type: "address" },
+      { internalType: "uint256", name: "deadline", type: "uint256" },
+    ],
+    name: "addLiquidity",
+    outputs: [
+      { internalType: "uint256", name: "amountA", type: "uint256" },
+      { internalType: "uint256", name: "amountB", type: "uint256" },
+      { internalType: "uint256", name: "liquidity", type: "uint256" },
+    ],
+    stateMutability: "nonpayable",
+    type: "function",
+  },
+] as const;
+
+// Uniswap V2 Pair ABI (for getReserves)
+export const UNIV2_PAIR_ABI = [
+  {
+    inputs: [],
+    name: "getReserves",
+    outputs: [
+      { internalType: "uint112", name: "reserve0", type: "uint112" },
+      { internalType: "uint112", name: "reserve1", type: "uint112" },
+      { internalType: "uint32", name: "blockTimestampLast", type: "uint32" },
+    ],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "token0",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "token1",
+    outputs: [{ internalType: "address", name: "", type: "address" }],
+    stateMutability: "view",
+    type: "function",
+  },
+  {
+    inputs: [],
+    name: "totalSupply",
+    outputs: [{ internalType: "uint256", name: "", type: "uint256" }],
+    stateMutability: "view",
+    type: "function",
+  },
+] as const;
