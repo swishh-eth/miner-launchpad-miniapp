@@ -29,6 +29,7 @@ export type RigListItem = {
   ups: bigint;
   unitPrice: bigint;
   totalMinted: bigint; // Total minted (from subgraph)
+  totalRevenue: bigint; // Total spent/revenue (from subgraph)
   epochCount: number; // Number of epochs (replaces mineCount)
   createdAt: number;
 };
@@ -301,12 +302,13 @@ export function useExploreRigs(
         ups: onChainState?.nextUps ?? 0n,
         unitPrice: onChainState?.unitPrice ?? 0n,
         totalMinted: 0n, // Not available without subgraph
+        totalRevenue: 0n, // Not available without subgraph
         epochCount: 0, // Not available without subgraph
         createdAt: 0, // Not available without subgraph
       };
     });
 
-    // Sort by price (descending) as fallback sorting
+    // Sort by price (descending) as fallback sorting for top
     if (sortBy === "top") {
       combinedRigs.sort((a, b) => (a.price > b.price ? -1 : 1));
     }
@@ -329,10 +331,16 @@ export function useExploreRigs(
         ups: onChainState?.nextUps ?? 0n,
         unitPrice: onChainState?.unitPrice ?? 0n,
         totalMinted: BigInt(Math.floor(parseFloat(subgraphRig.minted) * 1e18)),
+        totalRevenue: BigInt(Math.floor(parseFloat(subgraphRig.revenue) * 1e18)),
         epochCount: parseInt(subgraphRig.epochId),
         createdAt: parseInt(subgraphRig.createdAt),
       };
     });
+
+    // Re-sort by totalRevenue since subgraph sorts strings lexicographically
+    if (sortBy === "top") {
+      combinedRigs.sort((a, b) => (a.totalRevenue > b.totalRevenue ? -1 : 1));
+    }
   }
 
   // Filter out rigs without valid metadata (must have ipfs:// URI)

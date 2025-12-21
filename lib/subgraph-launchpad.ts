@@ -322,10 +322,10 @@ export const GET_TRENDING_RIGS_QUERY = gql`
   }
 `;
 
-// Get top rigs by minted amount
+// Get top rigs by revenue (total spent)
 export const GET_TOP_RIGS_QUERY = gql`
   query GetTopRigs($first: Int!) {
-    rigs(first: $first, orderBy: minted, orderDirection: desc) {
+    rigs(first: $first, orderBy: revenue, orderDirection: desc) {
       id
       launchpad {
         id
