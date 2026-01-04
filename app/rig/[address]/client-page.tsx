@@ -15,29 +15,33 @@ import {
 import { formatEther, formatUnits, parseUnits, type Address, zeroAddress } from "viem";
 
 import { NavBar } from "@/components/nav-bar";
-import { PriceChart } from "@/components/price-chart";
+import { LazyPriceChart } from "@/components/lazy-price-chart";
+import type { HoverData } from "@/components/price-chart";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { MineHistoryItem } from "@/components/mine-history-item";
+import { TokenStats } from "@/components/token-stats";
 import { useRigState, useRigInfo } from "@/hooks/useRigState";
 import { useUserRigStats } from "@/hooks/useUserRigStats";
-import { usePriceHistory } from "@/hooks/usePriceHistory";
+import { usePriceHistory, type Timeframe } from "@/hooks/usePriceHistory";
+import { useDexScreener } from "@/hooks/useDexScreener";
 import { useMineHistory } from "@/hooks/useMineHistory";
 import { useFarcaster, shareMiningAchievement, viewProfile } from "@/hooks/useFarcaster";
 import { useFriendActivity, getFriendActivityMessage } from "@/hooks/useFriendActivity";
 import { useRigLeaderboard } from "@/hooks/useRigLeaderboard";
 import { Leaderboard } from "@/components/leaderboard";
+import { usePrices } from "@/hooks/usePrices";
+import { useTokenMetadata } from "@/hooks/useMetadata";
+import { useProfile } from "@/hooks/useBatchProfiles";
 import {
   useBatchedTransaction,
   encodeApproveCall,
   type Call,
 } from "@/hooks/useBatchedTransaction";
 import { CONTRACT_ADDRESSES, MULTICALL_ABI, ERC20_ABI, NATIVE_ETH_ADDRESS } from "@/lib/contracts";
-import { getEthPrice, getDonutPrice, cn } from "@/lib/utils";
+import { cn } from "@/lib/utils";
 import { useSwapPrice, useSwapQuote, formatBuyAmount } from "@/hooks/useSwapQuote";
 import {
   DEFAULT_CHAIN_ID,
-  DEFAULT_ETH_PRICE_USD,
-  DEFAULT_DONUT_PRICE_USD,
-  PRICE_REFETCH_INTERVAL_MS,
   STALE_TIME_PROFILE_MS,
   DEADLINE_BUFFER_SECONDS,
   TOKEN_DECIMALS,
@@ -63,76 +67,21 @@ function LoadingDots() {
   );
 }
 
-// Mine history item with Neynar profile
-function MineHistoryItem({ mine, timeAgo }: { mine: { id: string; miner: string; uri: string; price: bigint; spent: bigint; timestamp: number }; timeAgo: (ts: number) => string }) {
-  const { data: profile } = useQuery<{
-    user: { fid: number | null; displayName: string | null; username: string | null; pfpUrl: string | null } | null;
-  }>({
-    queryKey: ["neynar-user", mine.miner],
-    queryFn: async () => {
-      const res = await fetch(`/api/neynar/user?address=${encodeURIComponent(mine.miner)}`);
-      if (!res.ok) return { user: null };
-      return res.json();
-    },
-    staleTime: 5 * 60 * 1000, // 5 minutes
-    retry: false,
-  });
-
-  const displayName = profile?.user?.displayName ?? profile?.user?.username ?? `${mine.miner.slice(0, 6)}...${mine.miner.slice(-4)}`;
-  const avatarUrl = profile?.user?.pfpUrl ?? `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(mine.miner.toLowerCase())}`;
-  const fid = profile?.user?.fid;
-
-  const handleProfileClick = () => {
-    if (fid) viewProfile(fid);
-  };
-
-  return (
-    <div className="flex items-start gap-3 p-3 rounded-xl bg-zinc-900/50">
-      <button
-        onClick={handleProfileClick}
-        disabled={!fid}
-        className={fid ? "cursor-pointer" : "cursor-default"}
-      >
-        <Avatar className="h-8 w-8 flex-shrink-0">
-          <AvatarImage src={avatarUrl} alt={displayName} />
-          <AvatarFallback className="bg-zinc-800 text-white text-xs">
-            {mine.miner.slice(2, 4).toUpperCase()}
-          </AvatarFallback>
-        </Avatar>
-      </button>
-      <div className="flex-1 min-w-0">
-        <button
-          onClick={handleProfileClick}
-          disabled={!fid}
-          className={`text-xs text-zinc-400 ${fid ? "hover:text-purple-400 cursor-pointer" : "cursor-default"}`}
-        >
-          {displayName}
-        </button>
-        {mine.uri && (
-          <div className="text-sm text-white mt-0.5 break-words">{mine.uri}</div>
-        )}
-      </div>
-      <div className="text-xs flex-shrink-0 text-right">
-        <div className="text-white">Ξ{Number(formatEther(mine.spent)).toFixed(4)}</div>
-        <div className="text-zinc-500">{timeAgo(mine.timestamp)}</div>
-      </div>
-    </div>
-  );
-}
-
 
 export default function RigDetailPage() {
   const params = useParams();
   const rigAddress = params.address as `0x${string}`;
 
   const [customMessage, setCustomMessage] = useState("");
-  const [ethUsdPrice, setEthUsdPrice] = useState<number>(DEFAULT_ETH_PRICE_USD);
-  const [donutUsdPrice, setDonutUsdPrice] = useState<number>(DEFAULT_DONUT_PRICE_USD);
   const [mineResult, setMineResult] = useState<"success" | "failure" | null>(null);
+
+  // Use shared price hook (cached across components)
+  const { ethUsdPrice, donutUsdPrice } = usePrices();
   const mineResultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tradeResult, setTradeResult] = useState<"success" | "failure" | null>(null);
   const tradeResultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [selectedTimeframe, setSelectedTimeframe] = useState<"1D" | "1W" | "1M" | "ALL">("1D");
+  const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("1D");
+  const [chartHover, setChartHover] = useState<HoverData>(null);
   const [showHeaderTicker, setShowHeaderTicker] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
@@ -157,11 +106,11 @@ export default function RigDetailPage() {
   const { rigInfo } = useRigInfo(rigAddress);
   const { stats: userStats } = useUserRigStats(address, rigAddress);
 
-  // Calculate fallback price for chart (unitPrice is in DONUT)
-  const fallbackChartPrice = rigState?.unitPrice
-    ? Number(formatEther(rigState.unitPrice)) * donutUsdPrice
-    : 0;
-  const { priceHistory, pairData, lpAddress, isLoading: isLoadingPrice } = usePriceHistory(rigAddress, fallbackChartPrice, rigInfo?.unitAddress);
+  // Mining price history for chart (from subgraph epochs, in USD)
+  const { priceHistory, isLoading: isLoadingPrice, timeframeSeconds, tokenFirstActiveTime } = usePriceHistory(rigAddress, selectedTimeframe, ethUsdPrice);
+
+  // DexScreener data for token price/market stats
+  const { pairData, lpAddress } = useDexScreener(rigAddress, rigInfo?.unitAddress);
   const { mines: mineHistory } = useMineHistory(rigAddress, 10);
 
   // Friend activity - get unique miner addresses and check for friends
@@ -190,31 +139,8 @@ export default function RigDetailPage() {
     10
   );
 
-  // Fetch token metadata from IPFS (needed early for defaultMessage in mine)
-  const { data: tokenMetadata } = useQuery<{
-    image?: string;
-    description?: string;
-    defaultMessage?: string;
-    links?: string[];
-    // Legacy format support
-    website?: string;
-    twitter?: string;
-    telegram?: string;
-    discord?: string;
-  }>({
-    queryKey: ["tokenMetadata", rigState?.rigUri],
-    queryFn: async () => {
-      if (!rigState?.rigUri) return null;
-      const metadataUrl = ipfsToHttp(rigState.rigUri);
-      if (!metadataUrl) return null;
-      const response = await fetch(metadataUrl);
-      if (!response.ok) return null;
-      return response.json();
-    },
-    enabled: !!rigState?.rigUri,
-    staleTime: STALE_TIME_PROFILE_MS,
-    retry: false,
-  });
+  // Use cached metadata hook
+  const { metadata: tokenMetadata, logoUrl: tokenLogoUrl } = useTokenMetadata(rigState?.rigUri);
 
   // Token total supply
   const { data: totalSupplyRaw } = useReadContract({
@@ -343,20 +269,6 @@ export default function RigDetailPage() {
     };
   }, []);
 
-  // Fetch ETH and DONUT prices
-  useEffect(() => {
-    const fetchPrices = async () => {
-      const [ethPrice, donutPrice] = await Promise.all([
-        getEthPrice(),
-        getDonutPrice(),
-      ]);
-      setEthUsdPrice(ethPrice);
-      setDonutUsdPrice(donutPrice);
-    };
-    fetchPrices();
-    const interval = setInterval(fetchPrices, PRICE_REFETCH_INTERVAL_MS);
-    return () => clearInterval(interval);
-  }, []);
 
   // Scroll handler for header ticker - show when price bottom gets covered by header
   useEffect(() => {
@@ -697,7 +609,6 @@ export default function RigDetailPage() {
   const marketCap = pairData?.marketCap ?? (totalSupply * displayPriceUsd);
   const liquidity = pairData?.liquidity?.usd ?? 0;
   const volume24h = pairData?.volume?.h24 ?? 0;
-  const priceChange24h = pairData?.priceChange?.h24 ?? 0;
 
   // User balances - unitPrice is in DONUT
   const unitBalance = rigState?.unitBalance ? Number(formatUnits(rigState.unitBalance, TOKEN_DECIMALS)) : 0;
@@ -716,66 +627,20 @@ export default function RigDetailPage() {
   const hasMiner = minerAddress !== zeroAddress;
   const isCurrentUserMiner = address && minerAddress.toLowerCase() === address.toLowerCase();
 
-  // Fetch miner profile
-  const { data: minerProfile } = useQuery<{
-    user: {
-      fid: number | null;
-      username: string | null;
-      displayName: string | null;
-      pfpUrl: string | null;
-    } | null;
-  }>({
-    queryKey: ["neynar-user", minerAddress],
-    queryFn: async () => {
-      const res = await fetch(`/api/neynar/user?address=${encodeURIComponent(minerAddress)}`);
-      if (!res.ok) return { user: null };
-      return res.json();
-    },
-    enabled: hasMiner,
-    staleTime: STALE_TIME_PROFILE_MS,
-    retry: false,
-  });
+  // Use cached profile hooks
+  const {
+    displayName: minerDisplayName,
+    avatarUrl: minerAvatarUrl,
+    fid: minerFid,
+  } = useProfile(hasMiner ? minerAddress : undefined);
 
-  // Fetch deployer/launcher profile
   const launcherAddress = rigInfo?.launcher ?? zeroAddress;
   const hasLauncher = launcherAddress !== zeroAddress;
-  const { data: launcherProfile } = useQuery<{
-    user: {
-      fid: number | null;
-      username: string | null;
-      displayName: string | null;
-      pfpUrl: string | null;
-    } | null;
-  }>({
-    queryKey: ["neynar-user", launcherAddress],
-    queryFn: async () => {
-      const res = await fetch(`/api/neynar/user?address=${encodeURIComponent(launcherAddress)}`);
-      if (!res.ok) return { user: null };
-      return res.json();
-    },
-    enabled: hasLauncher,
-    staleTime: STALE_TIME_PROFILE_MS,
-    retry: false,
-  });
-
-  const launcherDisplayName =
-    launcherProfile?.user?.displayName ??
-    launcherProfile?.user?.username ??
-    `${launcherAddress.slice(0, 6)}...${launcherAddress.slice(-4)}`;
-  const launcherAvatarUrl =
-    launcherProfile?.user?.pfpUrl ??
-    `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(launcherAddress.toLowerCase())}`;
-
-  const minerDisplayName =
-    minerProfile?.user?.displayName ??
-    minerProfile?.user?.username ??
-    `${minerAddress.slice(0, 6)}...${minerAddress.slice(-4)}`;
-  const minerAvatarUrl =
-    minerProfile?.user?.pfpUrl ??
-    `https://api.dicebear.com/7.x/shapes/svg?seed=${encodeURIComponent(minerAddress.toLowerCase())}`;
-
-  // Token logo from metadata
-  const tokenLogoUrl = tokenMetadata?.image ? ipfsToHttp(tokenMetadata.image) : null;
+  const {
+    displayName: launcherDisplayName,
+    avatarUrl: launcherAvatarUrl,
+    fid: launcherFid,
+  } = useProfile(hasLauncher ? launcherAddress : undefined);
 
   const formatTime = (seconds: number): string => {
     if (seconds < 0) return "0s";
@@ -873,16 +738,8 @@ export default function RigDetailPage() {
             <div className="flex-1">
               <div className="text-xs text-zinc-500 font-medium">{tokenSymbol}</div>
               <h1 className="text-xl font-bold">{tokenName}</h1>
-              <div ref={priceRef} className="mt-1 flex items-baseline gap-2">
+              <div ref={priceRef} className="mt-1">
                 <span className="text-2xl font-bold">${displayPriceUsd.toFixed(6)}</span>
-                {priceChange24h !== 0 && (
-                  <span className={cn(
-                    "text-sm font-medium",
-                    priceChange24h >= 0 ? "text-purple-500" : "text-zinc-500"
-                  )}>
-                    {priceChange24h >= 0 ? "+" : ""}{priceChange24h.toFixed(2)}%
-                  </span>
-                )}
               </div>
             </div>
             {/* Token Logo */}
@@ -895,9 +752,34 @@ export default function RigDetailPage() {
             </div>
           </div>
 
-          {/* Chart */}
+          {/* Mining Cost Chart */}
           <div className="mt-4">
-            <PriceChart data={chartData} isLoading={isLoadingPrice} height={160} />
+            <div className="flex items-center justify-between px-2 mb-2">
+              <span className="text-xs text-zinc-500">Mine Cost</span>
+              {(() => {
+                // Use hover data if available, otherwise use latest data point
+                const displayData = chartHover ?? (chartData.length > 0 ? chartData[chartData.length - 1] : null);
+                if (!displayData) {
+                  return <span className="text-xs text-zinc-600">USD</span>;
+                }
+                return (
+                  <div className="text-right">
+                    <span className="text-xs text-zinc-400">
+                      {new Date(displayData.time * 1000).toLocaleDateString(undefined, {
+                        month: "short",
+                        day: "numeric",
+                        hour: "2-digit",
+                        minute: "2-digit"
+                      })}
+                    </span>
+                    <span className="text-xs text-white font-medium ml-2">
+                      ${displayData.value.toFixed(4)}
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+            <LazyPriceChart data={chartData} isLoading={isLoadingPrice} height={160} onHover={setChartHover} timeframeSeconds={timeframeSeconds} tokenFirstActiveTime={tokenFirstActiveTime} />
           </div>
 
           {/* Timeframe Tabs */}
@@ -965,9 +847,9 @@ export default function RigDetailPage() {
               </div>
               <div className="flex items-center gap-3 mb-4">
                 <button
-                  onClick={() => minerProfile?.user?.fid && viewProfile(minerProfile.user.fid)}
-                  disabled={!minerProfile?.user?.fid}
-                  className={minerProfile?.user?.fid ? "cursor-pointer" : "cursor-default"}
+                  onClick={() => minerFid && viewProfile(minerFid)}
+                  disabled={!minerFid}
+                  className={minerFid ? "cursor-pointer" : "cursor-default"}
                 >
                   <Avatar className="h-10 w-10">
                     <AvatarImage src={minerAvatarUrl} alt={minerDisplayName} />
@@ -977,11 +859,11 @@ export default function RigDetailPage() {
                   </Avatar>
                 </button>
                 <button
-                  onClick={() => minerProfile?.user?.fid && viewProfile(minerProfile.user.fid)}
-                  disabled={!minerProfile?.user?.fid}
-                  className={`flex-1 text-left ${minerProfile?.user?.fid ? "cursor-pointer" : "cursor-default"}`}
+                  onClick={() => minerFid && viewProfile(minerFid)}
+                  disabled={!minerFid}
+                  className={`flex-1 text-left ${minerFid ? "cursor-pointer" : "cursor-default"}`}
                 >
-                  <div className={`text-sm font-semibold text-white ${minerProfile?.user?.fid ? "hover:text-purple-400" : ""}`}>
+                  <div className={`text-sm font-semibold text-white ${minerFid ? "hover:text-purple-400" : ""}`}>
                     {minerDisplayName}
                   </div>
                   <div className="text-xs text-zinc-500">
@@ -1084,9 +966,9 @@ export default function RigDetailPage() {
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-sm text-zinc-500">Deployed by</span>
                 <button
-                  onClick={() => launcherProfile?.user?.fid && viewProfile(launcherProfile.user.fid)}
-                  disabled={!launcherProfile?.user?.fid}
-                  className={`flex items-center gap-2 ${launcherProfile?.user?.fid ? "cursor-pointer" : "cursor-default"}`}
+                  onClick={() => launcherFid && viewProfile(launcherFid)}
+                  disabled={!launcherFid}
+                  className={`flex items-center gap-2 ${launcherFid ? "cursor-pointer" : "cursor-default"}`}
                 >
                   <Avatar className="h-5 w-5">
                     <AvatarImage src={launcherAvatarUrl} alt={launcherDisplayName} />
@@ -1094,7 +976,7 @@ export default function RigDetailPage() {
                       {launcherAddress.slice(2, 4).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
-                  <span className={`text-sm font-medium text-white ${launcherProfile?.user?.fid ? "hover:text-purple-400" : ""}`}>
+                  <span className={`text-sm font-medium text-white ${launcherFid ? "hover:text-purple-400" : ""}`}>
                     {launcherDisplayName}
                   </span>
                 </button>
@@ -1203,28 +1085,13 @@ export default function RigDetailPage() {
             </div>
           </div>
 
-          {/* Stats */}
-          <div className="px-2 mt-6">
-            <h2 className="text-base font-bold mb-3">Stats</h2>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-              <div>
-                <div className="text-xs text-zinc-500">Market cap</div>
-                <div className="text-sm font-semibold">{formatUsd(marketCap, true)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-zinc-500">Total supply</div>
-                <div className="text-sm font-semibold">{totalSupply.toLocaleString(undefined, { maximumFractionDigits: 0 })}</div>
-              </div>
-              <div>
-                <div className="text-xs text-zinc-500">Liquidity</div>
-                <div className="text-sm font-semibold">{liquidity > 0 ? formatUsd(liquidity, true) : "—"}</div>
-              </div>
-              <div>
-                <div className="text-xs text-zinc-500">24h volume</div>
-                <div className="text-sm font-semibold">{volume24h > 0 ? formatUsd(volume24h, true) : "—"}</div>
-              </div>
-            </div>
-          </div>
+          {/* Stats - Memoized component */}
+          <TokenStats
+            marketCap={marketCap}
+            totalSupply={totalSupply}
+            liquidity={liquidity}
+            volume24h={volume24h}
+          />
 
           {/* Leaderboard */}
           <Leaderboard
