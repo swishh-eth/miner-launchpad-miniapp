@@ -106,7 +106,7 @@ export function PriceChart({
       if (timeframeSeconds && timeframeSeconds !== Infinity) {
         const anchorSeries = chart.addSeries(LineSeries, {
           color: "rgba(0,0,0,0)",
-          lineWidth: 0,
+          lineWidth: 1,
           priceLineVisible: false,
           lastValueVisible: false,
           crosshairMarkerVisible: false,
