@@ -400,22 +400,61 @@ export default function RigDetailPage() {
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
         }}
       >
+        {/* Fixed Header */}
+        <div className="absolute top-0 left-0 right-0 z-20 px-3 flex items-center justify-end" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)", height: "calc(env(safe-area-inset-top, 0px) + 48px)" }}>
+          <button
+            onClick={async () => {
+              const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
+              try {
+                await navigator.clipboard.writeText(rigUrl);
+                setCopiedLink(true);
+                setTimeout(() => setCopiedLink(false), 2000);
+              } catch {
+                const textArea = document.createElement("textarea");
+                textArea.value = rigUrl;
+                textArea.style.position = "fixed";
+                textArea.style.left = "-9999px";
+                document.body.appendChild(textArea);
+                textArea.select();
+                document.execCommand("copy");
+                document.body.removeChild(textArea);
+                setCopiedLink(true);
+                setTimeout(() => setCopiedLink(false), 2000);
+              }
+            }}
+            className="p-2 hover:opacity-70 transition-opacity"
+          >
+            {copiedLink ? <Check className="h-5 w-5 text-green-400" /> : <Share2 className="h-5 w-5 text-zinc-400" />}
+          </button>
+        </div>
+
         {/* Scrollable Content */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide">
-          {/* Token Info + Price */}
-          <div className="px-3 flex gap-3 items-start">
-            <div className="w-14 h-14 rounded-xl overflow-hidden bg-zinc-900 flex items-center justify-center flex-shrink-0">
-              {tokenLogoUrl ? (
-                <img src={tokenLogoUrl} alt={tokenSymbol} className="w-14 h-14 object-cover rounded-xl" />
-              ) : (
-                <span className="text-lg font-bold text-purple-500">{tokenSymbol.slice(0, 2)}</span>
-              )}
-            </div>
-            <div className="flex-1">
-              <div className="text-xs text-zinc-500 font-medium">{tokenSymbol}</div>
-              <h1 className="text-xl font-bold">{tokenName}</h1>
+          {/* Hero Banner with Token Logo Background */}
+          <div className="relative h-48 overflow-hidden">
+            {/* Token Logo as Background */}
+            {tokenLogoUrl ? (
+              <img 
+                src={tokenLogoUrl} 
+                alt={tokenSymbol} 
+                className="absolute inset-0 w-full h-full object-cover scale-150"
+              />
+            ) : (
+              <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-zinc-900" />
+            )}
+            
+            {/* Top Fade */}
+            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black to-transparent" />
+            
+            {/* Bottom Fade */}
+            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
+            
+            {/* Token Info - Positioned at bottom */}
+            <div className="absolute inset-x-0 bottom-0 px-3 pb-3">
+              <div className="text-xs text-zinc-400 font-medium">{tokenSymbol}</div>
+              <h1 className="text-2xl font-bold">{tokenName}</h1>
               <div ref={priceRef} className="mt-0.5">
-                <span className="text-2xl font-bold">${displayPriceUsd.toFixed(6)}</span>
+                <span className="text-3xl font-bold">${displayPriceUsd.toFixed(6)}</span>
               </div>
             </div>
           </div>
@@ -489,34 +528,7 @@ export default function RigDetailPage() {
 
           {/* About */}
           <div className="px-3 mt-6">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="text-base font-bold">About</h2>
-              <button
-                onClick={async () => {
-                  const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
-                  try {
-                    await navigator.clipboard.writeText(rigUrl);
-                    setCopiedLink(true);
-                    setTimeout(() => setCopiedLink(false), 2000);
-                  } catch {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = rigUrl;
-                    textArea.style.position = "fixed";
-                    textArea.style.left = "-9999px";
-                    document.body.appendChild(textArea);
-                    textArea.select();
-                    document.execCommand("copy");
-                    document.body.removeChild(textArea);
-                    setCopiedLink(true);
-                    setTimeout(() => setCopiedLink(false), 2000);
-                  }
-                }}
-                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors text-xs text-zinc-400"
-              >
-                {copiedLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Share2 className="w-3.5 h-3.5" />}
-                {copiedLink ? "Copied" : "Share"}
-              </button>
-            </div>
+            <h2 className="text-base font-bold mb-3">About</h2>
             {hasLauncher && (
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-sm text-zinc-500">Deployed by</span>
