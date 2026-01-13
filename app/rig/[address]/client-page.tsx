@@ -3,12 +3,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, ArrowDownUp, Copy, Check, Share2 } from "lucide-react";
+import { ArrowLeft, Copy, Check, Share2, Home, Pickaxe, ChevronDown } from "lucide-react";
 import Link from "next/link";
 import {
   useBalance,
   useReadContract,
-  useSendTransaction,
   useWaitForTransactionReceipt,
   useWriteContract,
 } from "wagmi";
@@ -31,14 +30,8 @@ import { Leaderboard } from "@/components/leaderboard";
 import { usePrices } from "@/hooks/usePrices";
 import { useTokenMetadata } from "@/hooks/useMetadata";
 import { useProfile } from "@/hooks/useBatchProfiles";
-import {
-  useBatchedTransaction,
-  encodeApproveCall,
-  type Call,
-} from "@/hooks/useBatchedTransaction";
-import { CONTRACT_ADDRESSES, MULTICALL_ABI, ERC20_ABI, NATIVE_ETH_ADDRESS } from "@/lib/contracts";
+import { CONTRACT_ADDRESSES, MULTICALL_ABI, ERC20_ABI } from "@/lib/contracts";
 import { cn } from "@/lib/utils";
-import { useSwapPrice, useSwapQuote, formatBuyAmount } from "@/hooks/useSwapQuote";
 import {
   DEFAULT_CHAIN_ID,
   DEADLINE_BUFFER_SECONDS,
@@ -72,13 +65,13 @@ export default function RigDetailPage() {
 
   const { ethUsdPrice, donutUsdPrice } = usePrices();
   const mineResultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const [tradeResult, setTradeResult] = useState<"success" | "failure" | null>(null);
-  const tradeResultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("1D");
   const [chartHover, setChartHover] = useState<HoverData>(null);
   const [showHeaderTicker, setShowHeaderTicker] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
+  const [chartExpanded, setChartExpanded] = useState(false);
+  const [minePriceInUsd, setMinePriceInUsd] = useState(false);
   const [lastMineDetails, setLastMineDetails] = useState<{
     priceSpent: string;
     message: string;
@@ -86,10 +79,6 @@ export default function RigDetailPage() {
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const priceRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
-
-  const [mode, setMode] = useState<"mine" | "trade">("mine");
-  const [tradeDirection, setTradeDirection] = useState<"buy" | "sell">("buy");
-  const [tradeAmount, setTradeAmount] = useState("");
 
   const { address, isConnected, connect, user: farcasterUser } = useFarcaster();
 
@@ -141,15 +130,6 @@ export default function RigDetailPage() {
   const { data: txHash, writeContract, isPending: isWriting, reset: resetWrite } = useWriteContract();
   const { data: receipt, isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash, chainId: DEFAULT_CHAIN_ID });
 
-  const { sendTransaction, isPending: isSwapping, data: swapTxHash } = useSendTransaction();
-  const { isLoading: isWaitingSwap, isSuccess: swapSuccess, isError: swapError } = useWaitForTransactionReceipt({ hash: swapTxHash });
-
-  const {
-    execute: executeBatch,
-    state: batchState,
-    reset: resetBatch,
-  } = useBatchedTransaction();
-
   const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
     address,
     chainId: DEFAULT_CHAIN_ID,
@@ -166,55 +146,6 @@ export default function RigDetailPage() {
     refetchEthBalance();
     refetchUnitBalance();
   }, [refetchEthBalance, refetchUnitBalance]);
-
-  const sellToken = tradeDirection === "buy" ? NATIVE_ETH_ADDRESS : (rigInfo?.unitAddress || "");
-  const buyToken = tradeDirection === "buy" ? (rigInfo?.unitAddress || "") : NATIVE_ETH_ADDRESS;
-  const sellDecimals = 18;
-
-  const { data: tradePriceQuote, isLoading: isLoadingTradePrice, error: tradePriceError } = useSwapPrice({
-    sellToken,
-    buyToken,
-    sellAmount: tradeAmount || "0",
-    sellTokenDecimals: sellDecimals,
-    enabled: mode === "trade" && !!rigInfo?.unitAddress && !!tradeAmount && parseFloat(tradeAmount) > 0,
-  });
-
-  const tradeOutputAmountForSlippage = tradePriceQuote?.buyAmount
-    ? formatBuyAmount(tradePriceQuote.buyAmount, 18)
-    : "0";
-
-  const slippage = useMemo(() => {
-    if (!tradePriceQuote?.buyAmount || !tradeAmount || parseFloat(tradeAmount) === 0) return 1;
-
-    let inputUsd = tradePriceQuote?.sellAmountUsd ? parseFloat(tradePriceQuote.sellAmountUsd) : 0;
-    let outputUsd = tradePriceQuote?.buyAmountUsd ? parseFloat(tradePriceQuote.buyAmountUsd) : 0;
-
-    if (inputUsd === 0 || outputUsd === 0) {
-      const dexPrice = pairData?.priceUsd ? parseFloat(pairData.priceUsd) : null;
-      const onChainPrice = rigState?.unitPrice && rigState.unitPrice > 0n
-        ? Number(formatEther(rigState.unitPrice)) * donutUsdPrice
-        : 0;
-      const tokenPrice = dexPrice ?? onChainPrice;
-
-      inputUsd = parseFloat(tradeAmount) * (tradeDirection === "buy" ? ethUsdPrice : tokenPrice);
-      outputUsd = parseFloat(tradeOutputAmountForSlippage) * (tradeDirection === "buy" ? tokenPrice : ethUsdPrice);
-    }
-
-    if (inputUsd === 0) return 2;
-
-    const impact = ((inputUsd - outputUsd) / inputUsd) * 100;
-    return Math.min(49, Math.max(2, Math.ceil(Math.max(0, impact)) + 2));
-  }, [tradePriceQuote, tradeAmount, tradeOutputAmountForSlippage, tradeDirection, ethUsdPrice, pairData?.priceUsd, rigState?.unitPrice, donutUsdPrice]);
-
-  const { data: tradeQuote, isLoading: isLoadingTradeQuote } = useSwapQuote({
-    sellToken,
-    buyToken,
-    sellAmount: tradeAmount || "0",
-    sellTokenDecimals: sellDecimals,
-    taker: address,
-    slippageBps: Math.round(slippage * 100),
-    enabled: mode === "trade" && !!rigInfo?.unitAddress && !!tradeAmount && parseFloat(tradeAmount) > 0 && !!address,
-  });
 
   const resetMineResult = useCallback(() => {
     if (mineResultTimeoutRef.current) {
@@ -236,7 +167,6 @@ export default function RigDetailPage() {
   useEffect(() => {
     return () => {
       if (mineResultTimeoutRef.current) clearTimeout(mineResultTimeoutRef.current);
-      if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
     };
   }, []);
 
@@ -358,151 +288,6 @@ export default function RigDetailPage() {
     });
   }, [rigInfo, rigAddress, rigState?.glazed, rigState?.nextUps, interpolatedGlazed, customMessage]);
 
-  const handleTrade = useCallback(async () => {
-    if (!tradeQuote?.transaction || !address || !tradeAmount) return;
-
-    if (tradeDirection === "sell" && rigInfo?.unitAddress) {
-      const sellAmountWei = parseUnits(tradeAmount, 18);
-      const approveCall = encodeApproveCall(
-        rigInfo.unitAddress as Address,
-        tradeQuote.transaction.to as Address,
-        sellAmountWei
-      );
-
-      const swapCall: Call = {
-        to: tradeQuote.transaction.to as Address,
-        data: tradeQuote.transaction.data as `0x${string}`,
-        value: BigInt(tradeQuote.transaction.value || "0"),
-      };
-
-      try {
-        await executeBatch([approveCall, swapCall]);
-      } catch (error) {
-        console.error("Trade failed:", error);
-      }
-    } else {
-      sendTransaction({
-        to: tradeQuote.transaction.to as Address,
-        data: tradeQuote.transaction.data as `0x${string}`,
-        value: BigInt(tradeQuote.transaction.value || "0"),
-        chainId: DEFAULT_CHAIN_ID,
-      });
-    }
-  }, [tradeQuote, address, tradeAmount, tradeDirection, rigInfo?.unitAddress, executeBatch, sendTransaction]);
-
-  const lastProcessedSwapHash = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (swapSuccess && swapTxHash && swapTxHash !== lastProcessedSwapHash.current) {
-      lastProcessedSwapHash.current = swapTxHash;
-      setTradeAmount("");
-      refetchBalances();
-      refetchRigState();
-      setTimeout(() => {
-        refetchBalances();
-        refetchRigState();
-      }, 2000);
-      setTimeout(() => {
-        refetchBalances();
-        refetchRigState();
-      }, 5000);
-      if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
-      setTradeResult("success");
-      tradeResultTimeoutRef.current = setTimeout(() => {
-        setTradeResult(null);
-        tradeResultTimeoutRef.current = null;
-      }, 3000);
-    }
-  }, [swapSuccess, swapTxHash, refetchBalances, refetchRigState]);
-
-  const lastProcessedErrorHash = useRef<string | null>(null);
-
-  useEffect(() => {
-    if (swapError && swapTxHash && swapTxHash !== lastProcessedErrorHash.current) {
-      lastProcessedErrorHash.current = swapTxHash;
-      if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
-      setTradeResult("failure");
-      tradeResultTimeoutRef.current = setTimeout(() => {
-        setTradeResult(null);
-        tradeResultTimeoutRef.current = null;
-      }, 3000);
-    }
-  }, [swapError, swapTxHash]);
-
-  useEffect(() => {
-    if (batchState === "success") {
-      setTradeAmount("");
-      resetBatch();
-      refetchBalances();
-      refetchRigState();
-      setTimeout(() => {
-        refetchBalances();
-        refetchRigState();
-      }, 2000);
-      setTimeout(() => {
-        refetchBalances();
-        refetchRigState();
-      }, 5000);
-      if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
-      setTradeResult("success");
-      tradeResultTimeoutRef.current = setTimeout(() => {
-        setTradeResult(null);
-        tradeResultTimeoutRef.current = null;
-      }, 3000);
-    } else if (batchState === "error") {
-      resetBatch();
-      if (tradeResultTimeoutRef.current) clearTimeout(tradeResultTimeoutRef.current);
-      setTradeResult("failure");
-      tradeResultTimeoutRef.current = setTimeout(() => {
-        setTradeResult(null);
-        tradeResultTimeoutRef.current = null;
-      }, 3000);
-    }
-  }, [batchState, resetBatch, refetchBalances, refetchRigState]);
-
-  const tradeBalance = tradeDirection === "buy" ? ethBalanceData : unitBalanceData;
-  const tradeOutputAmount = tradePriceQuote?.buyAmount
-    ? formatBuyAmount(tradePriceQuote.buyAmount, 18)
-    : "0";
-  const formattedTradeOutput = parseFloat(tradeOutputAmount).toLocaleString(undefined, { maximumFractionDigits: 6 });
-
-  const priceImpact = useMemo(() => {
-    if (!tradePriceQuote?.buyAmount || !tradeAmount || parseFloat(tradeAmount) === 0) return null;
-
-    let inputUsd = tradePriceQuote?.sellAmountUsd ? parseFloat(tradePriceQuote.sellAmountUsd) : 0;
-    let outputUsd = tradePriceQuote?.buyAmountUsd ? parseFloat(tradePriceQuote.buyAmountUsd) : 0;
-
-    if (inputUsd === 0 || outputUsd === 0) {
-      const dexPrice = pairData?.priceUsd ? parseFloat(pairData.priceUsd) : null;
-      const onChainPrice = rigState?.unitPrice && rigState.unitPrice > 0n
-        ? Number(formatEther(rigState.unitPrice)) * donutUsdPrice
-        : 0;
-      const tokenPrice = dexPrice ?? onChainPrice;
-
-      inputUsd = parseFloat(tradeAmount) * (tradeDirection === "buy" ? ethUsdPrice : tokenPrice);
-      outputUsd = parseFloat(tradeOutputAmount) * (tradeDirection === "buy" ? tokenPrice : ethUsdPrice);
-    }
-
-    if (inputUsd === 0) return null;
-
-    const impact = ((inputUsd - outputUsd) / inputUsd) * 100;
-    return Math.max(0, impact);
-  }, [tradePriceQuote, tradeAmount, tradeOutputAmount, tradeDirection, ethUsdPrice, pairData?.priceUsd, rigState?.unitPrice, donutUsdPrice]);
-
-  const tradeInsufficientBalance = useMemo(() => {
-    if (!tradeAmount || !tradeBalance) return false;
-    try {
-      const sellAmountWei = parseUnits(tradeAmount, 18);
-      return sellAmountWei > tradeBalance.value;
-    } catch {
-      return false;
-    }
-  }, [tradeAmount, tradeBalance]);
-
-  const isTradeLoading = isLoadingTradePrice || isLoadingTradeQuote;
-  const isBatchPending = batchState === "pending" || batchState === "confirming";
-  const isTradePending = isBatchPending || isSwapping || isWaitingSwap;
-
   const buttonLabel = useMemo(() => {
     if (!rigState) return "LOADING...";
     if (mineResult === "success") return "MINED!";
@@ -514,23 +299,6 @@ export default function RigDetailPage() {
   const isMineDisabled = !rigState || isWriting || isConfirming || mineResult !== null;
   const tokenSymbol = rigInfo?.tokenSymbol ?? "TOKEN";
   const tokenName = rigInfo?.tokenName ?? "Loading...";
-
-  const hasNoLiquidity = tradePriceError || (tradeAmount && parseFloat(tradeAmount) > 0 && !isLoadingTradePrice && !tradePriceQuote?.buyAmount);
-
-  const tradeButtonText = useMemo(() => {
-    if (tradeResult === "success") return "Trade successful!";
-    if (tradeResult === "failure") return "Trade failed";
-    if (!isConnected) return "Connect Wallet";
-    if (!tradeAmount || parseFloat(tradeAmount) === 0) return "Enter amount";
-    if (tradeInsufficientBalance) return "Insufficient balance";
-    if (hasNoLiquidity) return "No liquidity";
-    if (isBatchPending) return batchState === "confirming" ? "Confirming..." : "Swapping...";
-    if (isSwapping || isWaitingSwap) return "Swapping...";
-    if (isLoadingTradeQuote) return "Loading...";
-    return tradeDirection === "buy" ? "Buy" : "Sell";
-  }, [tradeResult, isConnected, tradeAmount, tradeInsufficientBalance, hasNoLiquidity, isBatchPending, batchState, isSwapping, isWaitingSwap, isLoadingTradeQuote, tradeDirection]);
-
-  const canTrade = isConnected && tradeAmount && parseFloat(tradeAmount) > 0 && !tradeInsufficientBalance && !isTradeLoading && !hasNoLiquidity && !!tradeQuote?.transaction?.to;
 
   const glazedAmount = interpolatedGlazed ?? rigState?.glazed ?? 0n;
   const unitPrice = rigState?.unitPrice ?? 0n;
@@ -667,13 +435,28 @@ export default function RigDetailPage() {
               <div className="text-xs text-zinc-400">${displayPriceUsd.toFixed(6)}</div>
             </div>
             <button
-              onClick={() => {
-                setMode(mode === "mine" ? "trade" : "mine");
-                setTradeAmount("");
+              onClick={async () => {
+                const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
+                try {
+                  await navigator.clipboard.writeText(rigUrl);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
+                } catch {
+                  const textArea = document.createElement("textarea");
+                  textArea.value = rigUrl;
+                  textArea.style.position = "fixed";
+                  textArea.style.left = "-9999px";
+                  document.body.appendChild(textArea);
+                  textArea.select();
+                  document.execCommand("copy");
+                  document.body.removeChild(textArea);
+                  setCopiedLink(true);
+                  setTimeout(() => setCopiedLink(false), 2000);
+                }
               }}
-              className="px-3 py-1.5 rounded-lg bg-purple-500 hover:bg-purple-600 transition-colors text-black text-xs font-semibold z-10 outline-none focus:outline-none"
+              className="p-1 -mr-1 hover:opacity-70 transition-opacity z-10"
             >
-              {mode === "mine" ? "Trade" : "Mine"}
+              {copiedLink ? <Check className="h-5 w-5 text-green-400" /> : <Share2 className="h-5 w-5 text-zinc-400" />}
             </button>
           </div>
         </div>
@@ -698,106 +481,18 @@ export default function RigDetailPage() {
             </div>
           </div>
 
-          {/* Mining Cost Chart */}
-          <div className="mt-4">
-            <div className="flex items-center justify-between px-2 mb-2">
-              <span className="text-xs text-zinc-500">Mine Cost</span>
-              {(() => {
-                const displayData = chartHover ?? (chartData.length > 0 ? chartData[chartData.length - 1] : null);
-                if (!displayData) {
-                  return <span className="text-xs text-zinc-600">USD</span>;
-                }
-                return (
-                  <div className="text-right">
-                    <span className="text-xs text-zinc-400">
-                      {new Date(displayData.time * 1000).toLocaleDateString(undefined, {
-                        month: "short",
-                        day: "numeric",
-                        hour: "2-digit",
-                        minute: "2-digit"
-                      })}
-                    </span>
-                    <span className="text-xs text-white font-medium ml-2">
-                      ${displayData.value.toFixed(4)}
-                    </span>
-                  </div>
-                );
-              })()}
-            </div>
-            <LazyPriceChart data={chartData} isLoading={isLoadingPrice} height={160} onHover={setChartHover} timeframeSeconds={timeframeSeconds} tokenFirstActiveTime={tokenFirstActiveTime} />
-          </div>
-
-          {/* Timeframe Tabs */}
-          <div className="flex justify-between px-2 mt-2">
-            {(["1D", "1W", "1M", "ALL"] as const).map((tf) => (
-              <button
-                key={tf}
-                onClick={() => setSelectedTimeframe(tf)}
-                className={cn(
-                  "flex-1 py-2 text-xs font-medium transition-colors",
-                  selectedTimeframe === tf
-                    ? "text-purple-500"
-                    : "text-zinc-600 hover:text-zinc-400"
-                )}
-              >
-                {tf}
-              </button>
-            ))}
-          </div>
-
-          {/* Miner */}
+          {/* Current Miner - Centered */}
           {hasMiner && (
-            <div className="px-2 mt-6">
-              <div className="flex items-center justify-between mb-3">
-                <h2 className="text-base font-bold">Miner</h2>
-                <div className="flex items-center gap-2">
-                  {isCurrentUserMiner && (
-                    <button
-                      onClick={handleShareMine}
-                      className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 transition-colors text-xs text-purple-400"
-                      title="Cast to Farcaster"
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                      Cast
-                    </button>
-                  )}
-                  <button
-                    onClick={async () => {
-                      const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
-                      try {
-                        await navigator.clipboard.writeText(rigUrl);
-                        setCopiedLink(true);
-                        setTimeout(() => setCopiedLink(false), 2000);
-                      } catch {
-                        const textArea = document.createElement("textarea");
-                        textArea.value = rigUrl;
-                        textArea.style.position = "fixed";
-                        textArea.style.left = "-9999px";
-                        document.body.appendChild(textArea);
-                        textArea.select();
-                        document.execCommand("copy");
-                        document.body.removeChild(textArea);
-                        setCopiedLink(true);
-                        setTimeout(() => setCopiedLink(false), 2000);
-                      }
-                    }}
-                    className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors text-xs text-zinc-400"
-                    title="Copy link"
-                  >
-                    {copiedLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Copy className="w-3.5 h-3.5" />}
-                    {copiedLink ? "Copied" : "Share"}
-                  </button>
-                </div>
-              </div>
-              <div className="flex items-center gap-3 mb-4">
+            <div className="mt-6 px-2">
+              <div className="flex flex-col items-center">
                 <button
                   onClick={() => minerFid && viewProfile(minerFid)}
                   disabled={!minerFid}
                   className={minerFid ? "cursor-pointer" : "cursor-default"}
                 >
-                  <Avatar className="h-10 w-10">
+                  <Avatar className="h-16 w-16 ring-2 ring-purple-500/50">
                     <AvatarImage src={minerAvatarUrl} alt={minerDisplayName} />
-                    <AvatarFallback className="bg-zinc-800 text-white text-xs">
+                    <AvatarFallback className="bg-zinc-800 text-white text-lg">
                       {minerAddress.slice(-2).toUpperCase()}
                     </AvatarFallback>
                   </Avatar>
@@ -805,30 +500,38 @@ export default function RigDetailPage() {
                 <button
                   onClick={() => minerFid && viewProfile(minerFid)}
                   disabled={!minerFid}
-                  className={`flex-1 text-left ${minerFid ? "cursor-pointer" : "cursor-default"}`}
+                  className={`mt-2 text-center ${minerFid ? "cursor-pointer" : "cursor-default"}`}
                 >
                   <div className={`text-sm font-semibold text-white ${minerFid ? "hover:text-purple-400" : ""}`}>
                     {minerDisplayName}
                   </div>
                   <div className="text-xs text-zinc-500">
-                    {minerAddress.slice(0, 6)}...{minerAddress.slice(-4)}
+                    Mining for {formatTime(glazeElapsedSeconds)}
                   </div>
                 </button>
-                <div className="text-right">
-                  <div className="text-xs text-zinc-500">{formatTime(glazeElapsedSeconds)}</div>
-                </div>
+                {isCurrentUserMiner && (
+                  <button
+                    onClick={handleShareMine}
+                    className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 transition-colors text-xs text-purple-400"
+                  >
+                    <Share2 className="w-3.5 h-3.5" />
+                    Cast
+                  </button>
+                )}
               </div>
-              <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-                <div>
+              
+              {/* Miner Stats Grid */}
+              <div className="grid grid-cols-2 gap-x-8 gap-y-3 mt-4 bg-zinc-900/50 rounded-xl p-4">
+                <div className="text-center">
                   <div className="text-xs text-zinc-500">Mine rate</div>
                   <div className="text-sm font-semibold">
                     {Number(formatUnits(rigState?.nextUps ?? 0n, TOKEN_DECIMALS)).toFixed(2)}/s
                   </div>
                   <div className="text-[10px] text-zinc-600">${rateUsd.toFixed(4)}/s</div>
                 </div>
-                <div>
+                <div className="text-center">
                   <div className="text-xs text-zinc-500">Mined</div>
-                  <div className="flex items-center gap-1 text-sm font-semibold">
+                  <div className="flex items-center justify-center gap-1 text-sm font-semibold">
                     <span>+</span>
                     {tokenLogoUrl ? (
                       <img src={tokenLogoUrl} alt={tokenSymbol} className="w-4 h-4 rounded-full" />
@@ -841,66 +544,59 @@ export default function RigDetailPage() {
                   </div>
                   <div className="text-[10px] text-zinc-600">{formatUsd(glazedUsd)}</div>
                 </div>
-                <div>
-                  <div className="text-xs text-zinc-500">Total</div>
-                  <div className="text-sm font-semibold">
-                    +{formatUsd(glazedUsd + glazedUsd)}
-                  </div>
-                </div>
-                <div>
-                  <div className="text-xs text-zinc-500">PnL</div>
-                  <div className="text-sm font-semibold">
-                    +Ξ{(glazedUsd / ethUsdPrice).toFixed(4)}
-                  </div>
-                  <div className="text-[10px] text-zinc-600">{formatUsd(glazedUsd)}</div>
-                </div>
               </div>
             </div>
           )}
 
-          {/* Your Position */}
-          <div className="px-2 mt-6">
-            <h2 className="text-base font-bold mb-3">Your position</h2>
-            <div className="grid grid-cols-2 gap-x-8 gap-y-3">
-              <div>
-                <div className="text-xs text-zinc-500">Balance</div>
-                <div className="flex items-center gap-1 text-sm font-semibold">
-                  {tokenLogoUrl ? (
-                    <img src={tokenLogoUrl} alt={tokenSymbol} className="w-4 h-4 rounded-full" />
-                  ) : (
-                    <span className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center text-[8px] text-black font-bold">
-                      {tokenSymbol.slice(0, 2)}
+          {/* Mining Cost Chart - Collapsible */}
+          <div className="mt-4">
+            <button 
+              onClick={() => setChartExpanded(!chartExpanded)}
+              className="w-full flex items-center justify-between px-2 py-2 hover:bg-zinc-900/30 transition-colors rounded-lg"
+            >
+              <span className="text-xs text-zinc-500">Mine Cost</span>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const displayData = chartHover ?? (chartData.length > 0 ? chartData[chartData.length - 1] : null);
+                  if (!displayData) {
+                    return <span className="text-xs text-zinc-600">--</span>;
+                  }
+                  return (
+                    <span className="text-xs text-white font-medium">
+                      ${displayData.value.toFixed(4)}
                     </span>
-                  )}
-                  <span>{unitBalance.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
+                  );
+                })()}
+                <ChevronDown className={cn(
+                  "w-4 h-4 text-zinc-500 transition-transform",
+                  chartExpanded && "rotate-180"
+                )} />
+              </div>
+            </button>
+            
+            {chartExpanded && (
+              <>
+                <LazyPriceChart data={chartData} isLoading={isLoadingPrice} height={160} onHover={setChartHover} timeframeSeconds={timeframeSeconds} tokenFirstActiveTime={tokenFirstActiveTime} />
+                
+                {/* Timeframe Tabs */}
+                <div className="flex justify-between px-2 mt-2">
+                  {(["1D", "1W", "1M", "ALL"] as const).map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setSelectedTimeframe(tf)}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium transition-colors",
+                        selectedTimeframe === tf
+                          ? "text-purple-500"
+                          : "text-zinc-600 hover:text-zinc-400"
+                      )}
+                    >
+                      {tf}
+                    </button>
+                  ))}
                 </div>
-                <div className="text-[10px] text-zinc-600">{formatUsd(unitBalanceUsd)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-zinc-500">Mined</div>
-                <div className="flex items-center gap-1 text-sm font-semibold">
-                  {tokenLogoUrl ? (
-                    <img src={tokenLogoUrl} alt={tokenSymbol} className="w-4 h-4 rounded-full" />
-                  ) : (
-                    <span className="w-4 h-4 rounded-full bg-purple-500 flex items-center justify-center text-[8px] text-black font-bold">
-                      {tokenSymbol.slice(0, 2)}
-                    </span>
-                  )}
-                  <span>{totalMined.toLocaleString(undefined, { maximumFractionDigits: 0 })}</span>
-                </div>
-                <div className="text-[10px] text-zinc-600">{formatUsd(totalMinedUsd)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-zinc-500">Spent</div>
-                <div className="text-sm font-semibold">Ξ{totalSpent.toFixed(4)}</div>
-                <div className="text-[10px] text-zinc-600">{formatUsd(totalSpentUsd)}</div>
-              </div>
-              <div>
-                <div className="text-xs text-zinc-500">Earned</div>
-                <div className="text-sm font-semibold">Ξ{totalEarned.toFixed(4)}</div>
-                <div className="text-[10px] text-zinc-600">{formatUsd(totalEarnedUsd)}</div>
-              </div>
-            </div>
+              </>
+            )}
           </div>
 
           {/* About */}
@@ -1081,206 +777,65 @@ export default function RigDetailPage() {
             </div>
           </div>
 
-          {/* Spacer for bottom bar */}
-          <div className={mode === "trade" ? "h-96" : "h-48"} />
+          {/* Spacer for floating buttons */}
+          <div className="h-32" />
         </div>
 
-        {/* Bottom Action Bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-white">
-          <div
-            className="max-w-[520px] mx-auto px-3 pt-3"
-            style={{
-              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
-            }}
-          >
-            {mode === "mine" ? (
-              <>
-                <input
-                  type="text"
-                  value={customMessage}
-                  onChange={(e) => setCustomMessage(e.target.value)}
-                  placeholder="Add a message..."
-                  maxLength={100}
-                  className="w-full rounded-lg bg-zinc-100 border border-zinc-200 px-3 py-2 text-sm text-black placeholder-zinc-400 focus:outline-none focus:border-purple-400 disabled:opacity-40 mb-2"
-                  disabled={isMineDisabled}
-                />
-                <div className="flex items-center justify-between gap-4">
-                  <div className="flex-1">
-                    <div className="text-xs text-zinc-500 mb-1">Mine price</div>
-                    <div className="text-lg font-semibold text-black">Ξ{priceEth.toFixed(6)}</div>
-                    <div className="text-xs text-zinc-500">{formatUsd(priceUsd)}</div>
-                  </div>
-                  <div className="text-right">
-                    <div className="text-[10px] text-zinc-500 mb-1">
-                      Balance: Ξ{ethBalance.toFixed(4)}
-                    </div>
-                    <div className="flex items-center gap-2 justify-end">
-                      <button
-                        onClick={handleMine}
-                        disabled={isMineDisabled}
-                        className={cn(
-                          "w-[calc(50vw-16px)] max-w-[244px] py-2.5 rounded-lg font-semibold transition-all text-sm",
-                          mineResult === "failure"
-                            ? "bg-zinc-700 text-white"
-                            : "bg-purple-500 text-white hover:bg-purple-600 active:scale-[0.98]",
-                          isMineDisabled && !mineResult && "opacity-40 cursor-not-allowed"
-                        )}
-                      >
-                        {buttonLabel}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              </>
-            ) : (
-              <>
-                {/* Trade Input */}
-                <div className="bg-zinc-100 border border-zinc-200 rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-zinc-500">You pay</span>
-                    {tradeBalance && (
-                      <button
-                        onClick={() => {
-                          if (tradeDirection === "buy" && ethBalanceData) {
-                            const maxEth = parseFloat(formatUnits(ethBalanceData.value, 18)) - 0.001;
-                            setTradeAmount(Math.max(0, maxEth).toString());
-                          } else if (tradeDirection === "sell" && unitBalanceData) {
-                            setTradeAmount(formatUnits(unitBalanceData.value, 18));
-                          }
-                        }}
-                        className="text-xs text-zinc-500 hover:text-black"
-                      >
-                        Balance: {parseFloat(formatUnits(tradeBalance.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 })}
-                      </button>
-                    )}
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-200 flex items-center justify-center">
-                      {tradeDirection === "buy" ? (
-                        <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
-                      ) : tokenLogoUrl ? (
-                        <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
-                      ) : (
-                        <span className="text-xs font-bold text-black">{tokenSymbol.slice(0, 2)}</span>
-                      )}
-                    </div>
-                    <input
-                      type="number"
-                      value={tradeAmount}
-                      onChange={(e) => setTradeAmount(e.target.value)}
-                      placeholder="0"
-                      className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-black placeholder-zinc-400 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
-                    />
-                    <span className="shrink-0 text-sm font-semibold text-zinc-500">
-                      {tradeDirection === "buy" ? "ETH" : tokenSymbol}
-                    </span>
-                  </div>
-                  <div className="text-xs text-zinc-500 mt-1">
-                    {tradeAmount && parseFloat(tradeAmount) > 0
-                      ? `$${(parseFloat(tradeAmount) * (tradeDirection === "buy" ? ethUsdPrice : displayPriceUsd)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "$0.00"}
-                  </div>
-                </div>
-
-                {/* Swap Direction Button */}
-                <div className="flex justify-center -my-4 relative z-10">
-                  <button
-                    onClick={() => {
-                      setTradeDirection(tradeDirection === "buy" ? "sell" : "buy");
-                      setTradeAmount("");
-                    }}
-                    className="bg-purple-500 hover:bg-purple-600 p-2 rounded-xl border-4 border-white transition-colors"
-                  >
-                    <ArrowDownUp className="w-4 h-4 text-white" />
-                  </button>
-                </div>
-
-                {/* Trade Output */}
-                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3">
-                  <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-zinc-500">You receive</span>
-                    <span className="text-xs text-zinc-500">
-                      Balance: {tradeDirection === "buy"
-                        ? (unitBalanceData ? parseFloat(formatUnits(unitBalanceData.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0")
-                        : (ethBalanceData ? parseFloat(formatUnits(ethBalanceData.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0")
-                      }
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-200 flex items-center justify-center">
-                      {tradeDirection === "buy" ? (
-                        tokenLogoUrl ? (
-                          <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
-                        ) : (
-                          <span className="text-xs font-bold text-black">{tokenSymbol.slice(0, 2)}</span>
-                        )
-                      ) : (
-                        <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
-                      )}
-                    </div>
-                    <div className="flex-1 text-xl font-semibold text-black">
-                      {isTradeLoading && tradeAmount ? (
-                        <span className="inline-flex items-center gap-0.5">
-                          <span className="animate-bounce-dot-1">•</span>
-                          <span className="animate-bounce-dot-2">•</span>
-                          <span className="animate-bounce-dot-3">•</span>
-                        </span>
-                      ) : formattedTradeOutput}
-                    </div>
-                    <span className="shrink-0 text-sm font-semibold text-zinc-500">
-                      {tradeDirection === "buy" ? tokenSymbol : "ETH"}
-                    </span>
-                  </div>
-                  <div className="text-xs text-zinc-500 mt-1">
-                    {parseFloat(tradeOutputAmount) > 0
-                      ? `$${(parseFloat(tradeOutputAmount) * (tradeDirection === "buy" ? displayPriceUsd : ethUsdPrice)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
-                      : "$0.00"}
-                  </div>
-                </div>
-
-                {/* Trade Info */}
-                <div className="flex justify-between text-xs text-zinc-500 px-1 py-2">
-                  <span>Min. received</span>
-                  <span>
-                    {tradePriceQuote?.buyAmount
-                      ? (parseFloat(formatBuyAmount(tradePriceQuote.buyAmount, 18)) * (1 - slippage / 100)).toLocaleString(undefined, { maximumFractionDigits: 6 })
-                      : "0"
-                    } {tradeDirection === "buy" ? tokenSymbol : "ETH"}
-                  </span>
-                </div>
-                <div className="flex justify-between text-xs px-1 pb-3">
-                  <span className="text-zinc-500">Price impact / Slippage</span>
-                  <span className={cn(
-                    priceImpact !== null && priceImpact > 10 ? "text-red-500" :
-                    priceImpact !== null && priceImpact > 5 ? "text-yellow-600" : "text-zinc-500"
-                  )}>
-                    {priceImpact !== null && priceImpact > 5 && "⚠️ "}
-                    {priceImpact !== null ? `${priceImpact.toFixed(2)}%` : "—"} / {slippage}%
-                  </span>
-                </div>
-
-                {/* Trade Button */}
-                <button
-                  onClick={handleTrade}
-                  disabled={!canTrade || isTradePending || tradeResult !== null}
-                  className={cn(
-                    "w-full py-3 rounded-lg font-semibold transition-all text-sm bg-purple-500 text-white hover:bg-purple-600",
-                    (!canTrade || isTradePending || tradeResult !== null) && "cursor-not-allowed",
-                    (!canTrade || isTradePending) && tradeResult === null && "opacity-40"
-                  )}
-                >
-                  {tradeButtonText}
-                </button>
-
-                {/* No Liquidity Message */}
-                {hasNoLiquidity && tradeAmount && parseFloat(tradeAmount) > 0 && (
-                  <div className="mt-2 text-center text-xs text-zinc-500">
-                    This token may only be tradeable on its native DEX
-                  </div>
-                )}
-              </>
-            )}
+        {/* Floating Action Buttons */}
+        <div 
+          className="fixed right-4 flex items-end gap-3"
+          style={{
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+          }}
+        >
+          {/* Mine Button with Price Tooltip */}
+          <div className="relative">
+            {/* Price Tooltip */}
+            <button
+              onClick={() => setMinePriceInUsd(!minePriceInUsd)}
+              className="absolute -left-2 top-1/2 -translate-y-1/2 -translate-x-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 whitespace-nowrap"
+            >
+              <div className="text-xs text-zinc-400">Mine price</div>
+              <div className="text-sm font-semibold text-white">
+                {minePriceInUsd ? formatUsd(priceUsd) : `Ξ${priceEth.toFixed(6)}`}
+              </div>
+            </button>
+            
+            {/* Pickaxe Button */}
+            <button
+              onClick={handleMine}
+              disabled={isMineDisabled}
+              className={cn(
+                "w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all",
+                mineResult === "success"
+                  ? "bg-green-500"
+                  : mineResult === "failure"
+                  ? "bg-zinc-700"
+                  : "bg-purple-500 hover:bg-purple-600 active:scale-95",
+                isMineDisabled && !mineResult && "opacity-50"
+              )}
+            >
+              {mineResult === "success" ? (
+                <Check className="w-6 h-6 text-white" />
+              ) : isWriting || isConfirming ? (
+                <span className="inline-flex items-center gap-0.5 text-white">
+                  <span className="animate-bounce-dot-1">•</span>
+                  <span className="animate-bounce-dot-2">•</span>
+                  <span className="animate-bounce-dot-3">•</span>
+                </span>
+              ) : (
+                <Pickaxe className="w-6 h-6 text-white" />
+              )}
+            </button>
           </div>
+
+          {/* Home Button */}
+          <Link
+            href="/explore"
+            className="w-14 h-14 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center shadow-lg transition-all active:scale-95"
+          >
+            <Home className="w-6 h-6 text-white" />
+          </Link>
         </div>
       </div>
     </main>
