@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import Link from "next/link";
+import { ArrowLeft } from "lucide-react";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { NavBar } from "@/components/nav-bar";
 
@@ -57,7 +59,14 @@ export default function InfoPage() {
         }}
       >
         <div className="flex flex-1 flex-col overflow-hidden">
-          <div className="sticky top-0 z-10 bg-black pb-2">
+          {/* Header with back button */}
+          <div className="flex items-center gap-3 mb-3">
+            <Link 
+              href="/launch" 
+              className="p-2 -ml-2 rounded-full hover:bg-zinc-800 transition-colors"
+            >
+              <ArrowLeft className="h-5 w-5 text-purple-500" />
+            </Link>
             <h1 className="text-2xl font-bold tracking-wide">INFO</h1>
           </div>
 

@@ -1,11 +1,13 @@
 "use client";
 
-import { useEffect, useState, useRef } from "react";
+import { useEffect, useState, useRef, useMemo } from "react";
 import { Search } from "lucide-react";
 
 import { NavBar } from "@/components/nav-bar";
+import { Header } from "@/components/header";
 import { RigCard } from "@/components/rig-card";
 import { useExploreRigs, type SortOption } from "@/hooks/useAllRigs";
+import { useListPrices } from "@/hooks/useListPrices";
 import { useFarcaster } from "@/hooks/useFarcaster";
 import { cn, getDonutPrice } from "@/lib/utils";
 import {
@@ -31,7 +33,13 @@ export default function ExplorePage() {
   const { address } = useFarcaster();
   const { rigs, isLoading } = useExploreRigs(sortBy, searchQuery, address);
 
-  // Track when a new rig bumps to the top (only for Bump tab)
+  const unitAddresses = useMemo(
+    () => rigs.map((rig) => rig.unitAddress.toLowerCase()).filter(Boolean),
+    [rigs]
+  );
+
+  const { data: priceMap } = useListPrices(unitAddresses);
+
   useEffect(() => {
     if (sortBy !== "trending" || rigs.length === 0) {
       prevTopRigRef.current = null;
@@ -50,7 +58,6 @@ export default function ExplorePage() {
     prevTopRigRef.current = currentTopRig;
   }, [rigs, sortBy]);
 
-  // Fetch DONUT price
   useEffect(() => {
     const fetchPrice = async () => {
       const price = await getDonutPrice();
@@ -72,9 +79,7 @@ export default function ExplorePage() {
       >
         <div className="flex flex-1 flex-col overflow-hidden">
           {/* Header */}
-          <div className="mb-2">
-            <h1 className="text-2xl font-bold tracking-wide">EXPLORE</h1>
-          </div>
+          <Header title="EXPLORE" />
 
           {/* Search Bar */}
           <div className="relative mb-3">
@@ -133,6 +138,7 @@ export default function ExplorePage() {
                     key={rig.address}
                     rig={rig}
                     donutUsdPrice={donutUsdPrice}
+                    marketCapUsd={priceMap?.get(rig.unitAddress.toLowerCase())?.marketCap}
                     isKing={sortBy === "top" && index === 0}
                     isNewBump={rig.address === newBumpAddress}
                   />

@@ -22,12 +22,15 @@ const formatEth = (value: bigint, maximumFractionDigits = 4) => {
 const formatUsd = (value: number) => {
   if (value >= 1_000_000) return `$${(value / 1_000_000).toFixed(2)}M`;
   if (value >= 1_000) return `$${(value / 1_000).toFixed(2)}K`;
-  return `$${value.toFixed(2)}`;
+  if (value >= 1) return `$${value.toFixed(2)}`;
+  if (value > 0) return `$${value.toFixed(4)}`;
+  return "$0.00";
 };
 
 type RigCardProps = {
   rig: RigListItem;
   donutUsdPrice?: number;
+  marketCapUsd?: number; // <-- Add this prop
   isKing?: boolean;
   isNewBump?: boolean;
 };
@@ -35,19 +38,22 @@ type RigCardProps = {
 export const RigCard = memo(function RigCard({
   rig,
   donutUsdPrice = 0.01,
+  marketCapUsd: externalMarketCap, // <-- Destructure it
   isKing = false,
   isNewBump = false,
 }: RigCardProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
   const [imageError, setImageError] = useState(false);
 
-  // Calculate market cap
+  // Use external market cap (DexScreener) if available, otherwise calculate from on-chain
   const marketCapUsd =
-    rig.unitPrice > 0n
-      ? Number(formatEther(rig.totalMinted)) *
-        Number(formatEther(rig.unitPrice)) *
-        donutUsdPrice
-      : 0;
+    externalMarketCap !== undefined && externalMarketCap > 0
+      ? externalMarketCap
+      : rig.unitPrice > 0n
+        ? Number(formatEther(rig.totalMinted)) *
+          Number(formatEther(rig.unitPrice)) *
+          donutUsdPrice
+        : 0;
 
   // Fetch metadata for logo
   useEffect(() => {
