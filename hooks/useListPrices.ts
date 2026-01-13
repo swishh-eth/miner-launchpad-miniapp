@@ -8,68 +8,61 @@ type TokenPriceData = {
 
 export function useListPrices(unitAddresses: string[]) {
   return useQuery({
-    queryKey: ["listPrices", unitAddresses.sort().join(",")],
+    queryKey: ["listPrices", unitAddresses.length > 0 ? "batch" : "empty"],
     queryFn: async (): Promise<Map<string, TokenPriceData>> => {
       const priceMap = new Map<string, TokenPriceData>();
 
       if (unitAddresses.length === 0) return priceMap;
 
-      // DexScreener allows fetching multiple tokens at once (comma-separated)
-      // Max ~30 addresses per request to avoid URL length issues
-      const chunks: string[][] = [];
-      for (let i = 0; i < unitAddresses.length; i += 30) {
-        chunks.push(unitAddresses.slice(i, i + 30));
-      }
+      // Only fetch first 30 to keep it fast
+      const addressesToFetch = unitAddresses.slice(0, 30);
 
-      await Promise.all(
-        chunks.map(async (chunk) => {
-          try {
-            const addresses = chunk.join(",");
-            const res = await fetch(
-              `https://api.dexscreener.com/latest/dex/tokens/${addresses}`
-            );
+      try {
+        const addresses = addressesToFetch.join(",");
+        const res = await fetch(
+          `https://api.dexscreener.com/latest/dex/tokens/${addresses}`,
+          { signal: AbortSignal.timeout(5000) } // 5 second timeout
+        );
 
-            if (!res.ok) return;
+        if (!res.ok) return priceMap;
 
-            const data = await res.json();
-            const pairs = data.pairs || [];
+        const data = await res.json();
+        const pairs = data.pairs || [];
 
-            // Group pairs by token address, keep highest liquidity pair
-            const tokenPairs = new Map<string, any>();
+        const tokenPairs = new Map<string, any>();
 
-            for (const pair of pairs) {
-              if (pair.chainId !== "base") continue;
+        for (const pair of pairs) {
+          if (pair.chainId !== "base") continue;
 
-              const tokenAddr = pair.baseToken?.address?.toLowerCase();
-              if (!tokenAddr) continue;
+          const tokenAddr = pair.baseToken?.address?.toLowerCase();
+          if (!tokenAddr) continue;
 
-              const existing = tokenPairs.get(tokenAddr);
-              if (
-                !existing ||
-                (pair.liquidity?.usd || 0) > (existing.liquidity?.usd || 0)
-              ) {
-                tokenPairs.set(tokenAddr, pair);
-              }
-            }
-
-            // Add to price map
-            for (const [addr, pair] of tokenPairs) {
-              priceMap.set(addr, {
-                address: addr,
-                priceUsd: parseFloat(pair.priceUsd || "0"),
-                marketCap: pair.marketCap || 0,
-              });
-            }
-          } catch (error) {
-            console.error("Failed to fetch prices for chunk:", error);
+          const existing = tokenPairs.get(tokenAddr);
+          if (
+            !existing ||
+            (pair.liquidity?.usd || 0) > (existing.liquidity?.usd || 0)
+          ) {
+            tokenPairs.set(tokenAddr, pair);
           }
-        })
-      );
+        }
+
+        for (const [addr, pair] of tokenPairs) {
+          priceMap.set(addr, {
+            address: addr,
+            priceUsd: parseFloat(pair.priceUsd || "0"),
+            marketCap: pair.marketCap || 0,
+          });
+        }
+      } catch (error) {
+        console.error("Failed to fetch prices:", error);
+      }
 
       return priceMap;
     },
     enabled: unitAddresses.length > 0,
-    staleTime: 30_000, // 30 seconds
-    refetchInterval: 60_000, // 1 minute
+    staleTime: 60_000, // 1 minute
+    gcTime: 5 * 60_000, // 5 minutes cache
+    refetchInterval: 120_000, // 2 minutes
+    retry: false, // Don't retry on failure
   });
 }

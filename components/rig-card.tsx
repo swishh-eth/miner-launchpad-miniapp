@@ -1,7 +1,8 @@
 "use client";
 
-import { useEffect, useState, memo } from "react";
+import { memo } from "react";
 import Link from "next/link";
+import { useQuery } from "@tanstack/react-query";
 import { formatEther } from "viem";
 import { Crown } from "lucide-react";
 import type { RigListItem } from "@/hooks/useAllRigs";
@@ -27,10 +28,40 @@ const formatUsd = (value: number) => {
   return "$0.00";
 };
 
+// Fetch and cache metadata
+function useRigMetadata(rigUri: string | undefined) {
+  return useQuery({
+    queryKey: ["rig-metadata", rigUri],
+    queryFn: async () => {
+      if (!rigUri) return null;
+      
+      const metadataUrl = ipfsToHttp(rigUri);
+      if (!metadataUrl) return null;
+
+      const res = await fetch(metadataUrl, {
+        signal: AbortSignal.timeout(5000), // 5 second timeout
+      });
+      
+      if (!res.ok) return null;
+      
+      const metadata = await res.json();
+      return {
+        image: metadata.image ? ipfsToHttp(metadata.image) : null,
+        name: metadata.name,
+        description: metadata.description,
+      };
+    },
+    enabled: !!rigUri,
+    staleTime: 5 * 60_000, // 5 minutes
+    gcTime: 30 * 60_000, // 30 minutes cache
+    retry: false,
+  });
+}
+
 type RigCardProps = {
   rig: RigListItem;
   donutUsdPrice?: number;
-  marketCapUsd?: number; // <-- Add this prop
+  marketCapUsd?: number;
   isKing?: boolean;
   isNewBump?: boolean;
 };
@@ -38,14 +69,12 @@ type RigCardProps = {
 export const RigCard = memo(function RigCard({
   rig,
   donutUsdPrice = 0.01,
-  marketCapUsd: externalMarketCap, // <-- Destructure it
+  marketCapUsd: externalMarketCap,
   isKing = false,
   isNewBump = false,
 }: RigCardProps) {
-  const [logoUrl, setLogoUrl] = useState<string | null>(null);
-  const [imageError, setImageError] = useState(false);
+  const { data: metadata } = useRigMetadata(rig.rigUri);
 
-  // Use external market cap (DexScreener) if available, otherwise calculate from on-chain
   const marketCapUsd =
     externalMarketCap !== undefined && externalMarketCap > 0
       ? externalMarketCap
@@ -55,32 +84,7 @@ export const RigCard = memo(function RigCard({
           donutUsdPrice
         : 0;
 
-  // Fetch metadata for logo
-  useEffect(() => {
-    if (!rig.rigUri) return;
-
-    const metadataUrl = ipfsToHttp(rig.rigUri);
-    if (!metadataUrl) return;
-
-    setImageError(false);
-
-    fetch(metadataUrl)
-      .then((res) => {
-        if (!res.ok) throw new Error("Failed to fetch");
-        return res.json();
-      })
-      .then((metadata) => {
-        if (metadata.image) {
-          const imageUrl = ipfsToHttp(metadata.image);
-          if (imageUrl) {
-            setLogoUrl(imageUrl);
-          }
-        }
-      })
-      .catch(() => {
-        setImageError(true);
-      });
-  }, [rig.rigUri]);
+  const logoUrl = metadata?.image;
 
   return (
     <Link href={`/rig/${rig.address}`} className="block mb-1.5">
@@ -100,12 +104,15 @@ export const RigCard = memo(function RigCard({
             isKing && "ring-2 ring-yellow-500/50"
           )}
         >
-          {logoUrl && !imageError ? (
+          {logoUrl ? (
             <img
               src={logoUrl}
               alt={rig.tokenSymbol}
               className="w-full h-full object-cover"
-              onError={() => setImageError(true)}
+              loading="lazy"
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+              }}
             />
           ) : (
             <div className="w-full h-full flex items-center justify-center">
@@ -114,7 +121,6 @@ export const RigCard = memo(function RigCard({
               </span>
             </div>
           )}
-          {/* Crown badge for king */}
           {isKing && (
             <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
               <Crown className="w-3 h-3 text-black" />

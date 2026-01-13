@@ -33,11 +33,13 @@ export default function ExplorePage() {
   const { address } = useFarcaster();
   const { rigs, isLoading } = useExploreRigs(sortBy, searchQuery, address);
 
+  // Get unit addresses for price fetching (only after rigs load)
   const unitAddresses = useMemo(
     () => rigs.map((rig) => rig.unitAddress.toLowerCase()).filter(Boolean),
     [rigs]
   );
 
+  // Fetch prices in background (don't block render)
   const { data: priceMap } = useListPrices(unitAddresses);
 
   useEffect(() => {
@@ -114,7 +116,7 @@ export default function ExplorePage() {
           <div className="flex-1 overflow-y-auto scrollbar-hide pb-32">
             {isLoading ? (
               <div className="space-y-1.5">
-                {[...Array(6)].map((_, i) => (
+                {[...Array(8)].map((_, i) => (
                   <div
                     key={i}
                     className="h-[72px] rounded-xl bg-zinc-900 animate-pulse"
