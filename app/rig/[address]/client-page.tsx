@@ -77,7 +77,6 @@ export default function RigDetailPage() {
     message: string;
   } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
-  const priceRef = useRef<HTMLDivElement>(null);
 
   const { address, isConnected, connect, user: farcasterUser } = useFarcaster();
 
@@ -397,11 +396,17 @@ export default function RigDetailPage() {
       <div
         className="relative flex h-full w-full max-w-[520px] flex-1 flex-col overflow-hidden bg-black"
         style={{
-          paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
+          paddingTop: "calc(env(safe-area-inset-top, 0px) + 44px)",
         }}
       >
-        {/* Fixed Header */}
-        <div className="absolute top-0 left-0 right-0 z-20 px-3 flex items-center justify-end" style={{ paddingTop: "calc(env(safe-area-inset-top, 0px) + 12px)", height: "calc(env(safe-area-inset-top, 0px) + 48px)" }}>
+        {/* Fixed Header - Solid Black */}
+        <div 
+          className="absolute top-0 left-0 right-0 z-20 bg-black px-3 flex items-end justify-end pb-2" 
+          style={{ 
+            paddingTop: "env(safe-area-inset-top, 0px)", 
+            height: "calc(env(safe-area-inset-top, 0px) + 44px)" 
+          }}
+        >
           <button
             onClick={async () => {
               const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
@@ -422,84 +427,88 @@ export default function RigDetailPage() {
                 setTimeout(() => setCopiedLink(false), 2000);
               }
             }}
-            className="p-2 hover:opacity-70 transition-opacity"
+            className="p-2 -mr-2 hover:opacity-70 transition-opacity"
           >
             {copiedLink ? <Check className="h-5 w-5 text-green-400" /> : <Share2 className="h-5 w-5 text-zinc-400" />}
           </button>
         </div>
 
+        {/* Header Bottom Fade */}
+        <div className="absolute left-0 right-0 z-10 h-8 bg-gradient-to-b from-black to-transparent pointer-events-none" style={{ top: "calc(env(safe-area-inset-top, 0px) + 44px)" }} />
+
         {/* Scrollable Content */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide">
-          {/* Hero Banner with Token Logo Background */}
-          <div className="relative h-48 overflow-hidden">
+          {/* Hero Banner with Token Logo Background - Taller to go behind miner */}
+          <div className="relative h-[340px] overflow-hidden">
             {/* Token Logo as Background */}
             {tokenLogoUrl ? (
               <img 
                 src={tokenLogoUrl} 
                 alt={tokenSymbol} 
-                className="absolute inset-0 w-full h-full object-cover scale-150"
+                className="absolute inset-0 w-full h-full object-cover scale-125"
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-zinc-900" />
             )}
             
-            {/* Top Fade */}
-            <div className="absolute inset-x-0 top-0 h-24 bg-gradient-to-b from-black to-transparent" />
+            {/* Bottom Fade - Long gradient */}
+            <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black via-black/80 to-transparent" />
             
-            {/* Bottom Fade */}
-            <div className="absolute inset-x-0 bottom-0 h-32 bg-gradient-to-t from-black to-transparent" />
-            
-            {/* Token Info - Positioned at bottom */}
-            <div className="absolute inset-x-0 bottom-0 px-3 pb-3">
+            {/* Token Info - Positioned higher */}
+            <div className="absolute inset-x-0 top-4 px-3">
               <div className="text-xs text-zinc-400 font-medium">{tokenSymbol}</div>
               <h1 className="text-2xl font-bold">{tokenName}</h1>
-              <div ref={priceRef} className="mt-0.5">
+              <div className="mt-0.5">
                 <span className="text-3xl font-bold">${displayPriceUsd.toFixed(6)}</span>
               </div>
             </div>
+            
+            {/* Current Miner - Positioned inside hero */}
+            {hasMiner && (
+              <div className="absolute inset-x-0 bottom-4 px-3">
+                <div className="flex flex-col items-center">
+                  <button
+                    onClick={() => minerFid && viewProfile(minerFid)}
+                    disabled={!minerFid}
+                    className={minerFid ? "cursor-pointer" : "cursor-default"}
+                  >
+                    <Avatar className="h-16 w-16 ring-2 ring-purple-500/50">
+                      <AvatarImage src={minerAvatarUrl} alt={minerDisplayName} />
+                      <AvatarFallback className="bg-zinc-800 text-white text-lg">
+                        {minerAddress.slice(-2).toUpperCase()}
+                      </AvatarFallback>
+                    </Avatar>
+                  </button>
+                  <button
+                    onClick={() => minerFid && viewProfile(minerFid)}
+                    disabled={!minerFid}
+                    className={`mt-2 text-center ${minerFid ? "cursor-pointer" : "cursor-default"}`}
+                  >
+                    <div className={`text-sm font-semibold text-white ${minerFid ? "hover:text-purple-400" : ""}`}>
+                      {minerDisplayName}
+                    </div>
+                    <div className="text-xs text-zinc-500">
+                      Mining for {formatTime(glazeElapsedSeconds)}
+                    </div>
+                  </button>
+                  {isCurrentUserMiner && (
+                    <button
+                      onClick={handleShareMine}
+                      className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 transition-colors text-xs text-purple-400"
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                      Cast
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
 
-          {/* Current Miner - Centered */}
+          {/* Miner Stats Grid - Outside hero now */}
           {hasMiner && (
-            <div className="mt-6 px-3">
-              <div className="flex flex-col items-center">
-                <button
-                  onClick={() => minerFid && viewProfile(minerFid)}
-                  disabled={!minerFid}
-                  className={minerFid ? "cursor-pointer" : "cursor-default"}
-                >
-                  <Avatar className="h-16 w-16 ring-2 ring-purple-500/50">
-                    <AvatarImage src={minerAvatarUrl} alt={minerDisplayName} />
-                    <AvatarFallback className="bg-zinc-800 text-white text-lg">
-                      {minerAddress.slice(-2).toUpperCase()}
-                    </AvatarFallback>
-                  </Avatar>
-                </button>
-                <button
-                  onClick={() => minerFid && viewProfile(minerFid)}
-                  disabled={!minerFid}
-                  className={`mt-2 text-center ${minerFid ? "cursor-pointer" : "cursor-default"}`}
-                >
-                  <div className={`text-sm font-semibold text-white ${minerFid ? "hover:text-purple-400" : ""}`}>
-                    {minerDisplayName}
-                  </div>
-                  <div className="text-xs text-zinc-500">
-                    Mining for {formatTime(glazeElapsedSeconds)}
-                  </div>
-                </button>
-                {isCurrentUserMiner && (
-                  <button
-                    onClick={handleShareMine}
-                    className="mt-2 flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-purple-500/20 hover:bg-purple-500/30 transition-colors text-xs text-purple-400"
-                  >
-                    <Share2 className="w-3.5 h-3.5" />
-                    Cast
-                  </button>
-                )}
-              </div>
-              
-              {/* Miner Stats Grid */}
-              <div className="grid grid-cols-2 gap-x-8 gap-y-3 mt-4 bg-zinc-900/50 rounded-xl p-4">
+            <div className="px-3 mt-4">
+              <div className="grid grid-cols-2 gap-x-8 gap-y-3 bg-zinc-900/50 rounded-xl p-4">
                 <div className="text-center">
                   <div className="text-xs text-zinc-500">Mine rate</div>
                   <div className="text-sm font-semibold">
