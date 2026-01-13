@@ -438,24 +438,33 @@ export default function RigDetailPage() {
 
         {/* Scrollable Content */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide">
-          {/* Hero Banner with Token Logo Background - Taller to go behind miner */}
-          <div className="relative h-[340px] overflow-hidden">
-            {/* Token Logo as Background */}
+          {/* Hero Banner with Token Logo Background */}
+          <div className="relative h-[280px] overflow-hidden">
+            {/* Token Logo as Background - centered, no stretch */}
             {tokenLogoUrl ? (
               <img 
                 src={tokenLogoUrl} 
                 alt={tokenSymbol} 
-                className="absolute inset-0 w-full h-full object-cover scale-125"
+                className="absolute inset-0 w-full h-full object-cover"
               />
             ) : (
               <div className="absolute inset-0 bg-gradient-to-br from-purple-900/50 to-zinc-900" />
             )}
             
-            {/* Bottom Fade - Long gradient */}
-            <div className="absolute inset-x-0 bottom-0 h-48 bg-gradient-to-t from-black via-black/80 to-transparent" />
+            {/* Vignette - fade all edges */}
+            <div 
+              className="absolute inset-0 pointer-events-none"
+              style={{
+                background: `
+                  radial-gradient(ellipse at center, transparent 20%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0.9) 100%),
+                  linear-gradient(to bottom, black 0%, transparent 15%),
+                  linear-gradient(to top, black 0%, rgba(0,0,0,0.95) 30%, transparent 60%)
+                `
+              }}
+            />
             
             {/* Token Info - Positioned higher */}
-            <div className="absolute inset-x-0 top-4 px-3">
+            <div className="absolute inset-x-0 top-4 px-3 z-10">
               <div className="text-xs text-zinc-400 font-medium">{tokenSymbol}</div>
               <h1 className="text-2xl font-bold">{tokenName}</h1>
               <div className="mt-0.5">
@@ -465,7 +474,7 @@ export default function RigDetailPage() {
             
             {/* Current Miner - Positioned inside hero */}
             {hasMiner && (
-              <div className="absolute inset-x-0 bottom-4 px-3">
+              <div className="absolute inset-x-0 bottom-4 px-3 z-10">
                 <div className="flex flex-col items-center">
                   <button
                     onClick={() => minerFid && viewProfile(minerFid)}
@@ -770,19 +779,19 @@ export default function RigDetailPage() {
 
         {/* Floating Action Buttons */}
         <div 
-          className="fixed right-3 flex items-end gap-2"
+          className="fixed right-4 flex items-center gap-2"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
           }}
         >
           {/* Mine Controls */}
-          <div className="flex items-center">
+          <div className="flex items-center h-14">
             {/* Price Pill + Message + Mine Button Row */}
-            <div className="flex items-center">
+            <div className="flex items-center h-full">
               {/* Price Pill */}
               <button
                 onClick={() => setMinePriceInUsd(!minePriceInUsd)}
-                className="bg-zinc-900 border border-zinc-700 rounded-l-full pl-4 pr-3 py-2 flex items-center gap-2"
+                className="bg-zinc-900 border border-zinc-700 rounded-l-full pl-4 pr-3 h-full flex items-center gap-2"
               >
                 <div>
                   <div className="text-[10px] text-zinc-500 leading-tight">Mine price</div>
@@ -796,7 +805,7 @@ export default function RigDetailPage() {
               <button
                 onClick={() => setShowMessageInput(!showMessageInput)}
                 className={cn(
-                  "bg-zinc-900 border-y border-zinc-700 px-3 py-3 transition-colors",
+                  "bg-zinc-900 border-y border-zinc-700 px-3 h-full flex items-center transition-colors",
                   showMessageInput ? "bg-zinc-800" : "hover:bg-zinc-800",
                   customMessage && "text-purple-400"
                 )}
@@ -809,7 +818,7 @@ export default function RigDetailPage() {
                 onClick={handleMine}
                 disabled={isMineDisabled}
                 className={cn(
-                  "w-12 h-12 rounded-r-full flex items-center justify-center transition-all",
+                  "w-14 h-14 rounded-r-full flex items-center justify-center transition-all",
                   mineResult === "success"
                     ? "bg-green-500"
                     : mineResult === "failure"
@@ -819,7 +828,7 @@ export default function RigDetailPage() {
                 )}
               >
                 {mineResult === "success" ? (
-                  <Check className="w-5 h-5 text-white" />
+                  <Check className="w-6 h-6 text-white" />
                 ) : isWriting || isConfirming ? (
                   <span className="inline-flex items-center gap-0.5 text-white text-sm">
                     <span className="animate-bounce-dot-1">•</span>
@@ -827,7 +836,7 @@ export default function RigDetailPage() {
                     <span className="animate-bounce-dot-3">•</span>
                   </span>
                 ) : (
-                  <Pickaxe className="w-5 h-5 text-white" />
+                  <Pickaxe className="w-6 h-6 text-white" />
                 )}
               </button>
             </div>
@@ -836,20 +845,20 @@ export default function RigDetailPage() {
           {/* Home Button */}
           <Link
             href="/explore"
-            className="w-12 h-12 rounded-full bg-purple-500 hover:bg-purple-600 flex items-center justify-center shadow-lg transition-all active:scale-95"
+            className="w-14 h-14 rounded-full bg-purple-500 hover:bg-purple-600 flex items-center justify-center shadow-lg shadow-purple-500/30 transition-all active:scale-95"
           >
-            <Home className="w-5 h-5 text-white" />
+            <Home className="w-6 h-6 text-white" />
           </Link>
         </div>
 
         {/* Message Input Popover */}
         {showMessageInput && (
           <div 
-            className="fixed right-3 bg-zinc-900 border border-zinc-700 rounded-xl p-3 shadow-xl"
+            className="fixed right-4 bg-zinc-900 border border-zinc-700 rounded-xl p-3 shadow-xl"
             style={{
-              bottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)",
-              width: "calc(100% - 24px)",
-              maxWidth: "496px",
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 96px)",
+              width: "calc(100% - 32px)",
+              maxWidth: "488px",
             }}
           >
             <input
