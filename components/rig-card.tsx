@@ -4,7 +4,7 @@ import { useEffect, useState, memo } from "react";
 import Link from "next/link";
 import { motion } from "framer-motion";
 import { formatEther } from "viem";
-import { Crown, Pickaxe, TrendingUp } from "lucide-react";
+import { Crown } from "lucide-react";
 import type { RigListItem } from "@/hooks/useAllRigs";
 import { cn } from "@/lib/utils";
 import { ipfsToHttp } from "@/lib/constants";
@@ -26,20 +26,9 @@ const formatUsd = (value: number) => {
   return `$${value.toFixed(2)}`;
 };
 
-const formatTimeAgo = (timestamp: number): string => {
-  if (!timestamp) return "";
-  const now = Math.floor(Date.now() / 1000);
-  const diff = now - timestamp;
-  if (diff < 60) return `${diff}s`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  if (diff < 86400) return `${Math.floor(diff / 3600)}h`;
-  return `${Math.floor(diff / 86400)}d`;
-};
-
 type RigCardProps = {
   rig: RigListItem;
   donutUsdPrice?: number;
-  rank?: number;
   isKing?: boolean;
   isNewBump?: boolean;
 };
@@ -47,11 +36,11 @@ type RigCardProps = {
 export const RigCard = memo(function RigCard({
   rig,
   donutUsdPrice = 0.01,
-  rank,
   isKing = false,
   isNewBump = false,
 }: RigCardProps) {
   const [logoUrl, setLogoUrl] = useState<string | null>(null);
+  const [imageError, setImageError] = useState(false);
 
   // Calculate market cap
   const marketCapUsd =
@@ -61,26 +50,31 @@ export const RigCard = memo(function RigCard({
         donutUsdPrice
       : 0;
 
-  // Calculate token price in USD
-  const tokenPriceUsd =
-    rig.unitPrice > 0n
-      ? Number(formatEther(rig.unitPrice)) * donutUsdPrice
-      : 0;
-
   // Fetch metadata for logo
   useEffect(() => {
     if (!rig.rigUri) return;
+
     const metadataUrl = ipfsToHttp(rig.rigUri);
     if (!metadataUrl) return;
 
+    setImageError(false);
+
     fetch(metadataUrl)
-      .then((res) => res.json())
+      .then((res) => {
+        if (!res.ok) throw new Error("Failed to fetch");
+        return res.json();
+      })
       .then((metadata) => {
         if (metadata.image) {
-          setLogoUrl(ipfsToHttp(metadata.image));
+          const imageUrl = ipfsToHttp(metadata.image);
+          if (imageUrl) {
+            setLogoUrl(imageUrl);
+          }
         }
       })
-      .catch(() => {});
+      .catch(() => {
+        setImageError(true);
+      });
   }, [rig.rigUri]);
 
   return (
@@ -94,47 +88,38 @@ export const RigCard = memo(function RigCard({
           scale: { duration: 0.2 },
         }}
         className={cn(
-          "relative flex items-center gap-3 p-3 rounded-2xl transition-all cursor-pointer border",
+          "relative flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer",
           isKing
-            ? "bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-transparent border-yellow-500/30 shadow-[0_0_20px_rgba(234,179,8,0.15)]"
-            : "bg-zinc-900/80 border-zinc-800/50 hover:bg-zinc-800/80 hover:border-zinc-700/50",
+            ? "bg-gradient-to-r from-yellow-500/10 via-amber-500/5 to-transparent border border-yellow-500/30"
+            : "bg-zinc-900 hover:bg-zinc-800",
           isNewBump && "animate-pulse"
         )}
       >
-        {/* Rank Badge */}
-        {rank !== undefined && (
-          <div
-            className={cn(
-              "absolute -top-1.5 -left-1.5 w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold",
-              isKing
-                ? "bg-yellow-500 text-black"
-                : rank <= 3
-                  ? "bg-purple-500 text-black"
-                  : "bg-zinc-700 text-zinc-300"
-            )}
-          >
-            {isKing ? <Crown className="w-3.5 h-3.5" /> : rank}
-          </div>
-        )}
-
         {/* Token Logo */}
         <div
           className={cn(
-            "relative flex-shrink-0 w-11 h-11 rounded-xl overflow-hidden",
-            isKing ? "ring-2 ring-yellow-500/50" : "bg-zinc-800"
+            "relative flex-shrink-0 w-12 h-12 rounded-xl overflow-hidden bg-zinc-800",
+            isKing && "ring-2 ring-yellow-500/50"
           )}
         >
-          {logoUrl ? (
+          {logoUrl && !imageError ? (
             <img
               src={logoUrl}
               alt={rig.tokenSymbol}
               className="w-full h-full object-cover"
+              onError={() => setImageError(true)}
             />
           ) : (
-            <div className="w-full h-full bg-zinc-800 flex items-center justify-center">
-              <span className="text-purple-500 font-bold">
+            <div className="w-full h-full flex items-center justify-center">
+              <span className="text-purple-500 font-bold text-lg">
                 {rig.tokenSymbol.slice(0, 2)}
               </span>
+            </div>
+          )}
+          {/* Crown badge for king */}
+          {isKing && (
+            <div className="absolute -top-1 -right-1 w-5 h-5 bg-yellow-500 rounded-full flex items-center justify-center">
+              <Crown className="w-3 h-3 text-black" />
             </div>
           )}
         </div>
@@ -142,45 +127,22 @@ export const RigCard = memo(function RigCard({
         {/* Token Info */}
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-white truncate text-sm">
+            <span className="font-semibold text-white truncate">
               {rig.tokenName}
             </span>
-            {isKing && (
-              <Crown className="w-3.5 h-3.5 text-yellow-500 flex-shrink-0" />
-            )}
           </div>
-          <div className="flex items-center gap-2 mt-0.5">
-            <span className="text-xs text-zinc-500">{rig.tokenSymbol}</span>
-            {rig.createdAt > 0 && (
-              <span className="text-[10px] text-zinc-600">
-                {formatTimeAgo(rig.createdAt)} ago
-              </span>
-            )}
-          </div>
+          <div className="text-sm text-zinc-500">{rig.tokenSymbol}</div>
         </div>
 
         {/* Stats */}
-        <div className="flex-shrink-0 text-right space-y-0.5">
-          {/* Market Cap */}
-          <div className="text-sm font-semibold text-white">
-            {formatUsd(marketCapUsd)}
+        <div className="flex-shrink-0 text-right">
+          <div className="text-sm font-semibold text-purple-500">
+            Ξ{formatEth(rig.price, 4)}
           </div>
-          {/* Mine Price */}
-          <div className="flex items-center justify-end gap-1 text-[11px] text-zinc-500">
-            <Pickaxe className="w-3 h-3" />
-            <span>Ξ{formatEth(rig.price, 4)}</span>
+          <div className="text-xs text-zinc-500">
+            {formatUsd(marketCapUsd)} mcap
           </div>
         </div>
-
-        {/* Activity Indicator - shows epoch count */}
-        {rig.epochCount > 0 && (
-          <div className="flex-shrink-0 flex flex-col items-center justify-center px-2 border-l border-zinc-800">
-            <div className="text-xs font-semibold text-purple-400">
-              {rig.epochCount}
-            </div>
-            <div className="text-[9px] text-zinc-600">mines</div>
-          </div>
-        )}
       </motion.div>
     </Link>
   );

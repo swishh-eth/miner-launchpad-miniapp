@@ -2,93 +2,91 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Search, Rocket, Gavel, Info, User } from "lucide-react";
 
+const NAV_ITEMS = [
+  { href: "/launch", icon: Rocket, label: "Launch" },
+  { href: "/auctions", icon: Gavel, label: "Auctions" },
+  { href: "/explore", icon: Search, label: "Explore", isCenter: true },
+  { href: "/info", icon: Info, label: "Info" },
+  { href: "/profile", icon: User, label: "Profile" },
+];
+
 export function NavBar() {
   const pathname = usePathname();
-
-  // Check if we're on a rig detail page
   const isRigPage = pathname.startsWith("/rig/");
+
+  // Determine active index
+  const activeIndex = NAV_ITEMS.findIndex((item) =>
+    item.href === "/explore"
+      ? pathname === "/explore" || isRigPage
+      : pathname === item.href
+  );
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 bg-black/90 backdrop-blur-md border-t border-zinc-900"
+      className="fixed bottom-0 left-0 right-0 z-50 bg-black/95 backdrop-blur-md"
       style={{
         paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 12px)",
         paddingTop: "12px",
       }}
     >
-      <div className="flex justify-around items-center max-w-[520px] mx-auto px-4">
-        {/* Launch */}
-        <Link
-          href="/launch"
-          className={cn(
-            "flex flex-col items-center justify-center gap-1 p-2 transition-all",
-            pathname === "/launch"
-              ? "text-purple-500"
-              : "text-zinc-500 hover:text-zinc-300"
-          )}
-        >
-          <Rocket className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Launch</span>
-        </Link>
+      <div className="relative flex justify-around items-center max-w-[520px] mx-auto px-4">
+        {NAV_ITEMS.map((item, index) => {
+          const isActive = index === activeIndex;
+          const Icon = item.icon;
 
-        {/* Auctions */}
-        <Link
-          href="/auctions"
-          className={cn(
-            "flex flex-col items-center justify-center gap-1 p-2 transition-all",
-            pathname === "/auctions"
-              ? "text-purple-500"
-              : "text-zinc-500 hover:text-zinc-300"
-          )}
-        >
-          <Gavel className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Auctions</span>
-        </Link>
-
-        {/* Explore (center - primary) */}
-        <Link
-          href="/explore"
-          className={cn(
-            "flex flex-col items-center justify-center gap-1 p-3 -mt-4 transition-all rounded-2xl",
-            pathname === "/explore" || isRigPage
-              ? "bg-purple-500 text-black"
-              : "bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-          )}
-        >
-          <Search className="w-6 h-6" />
-          <span className="text-[10px] font-semibold">Explore</span>
-        </Link>
-
-        {/* Info */}
-        <Link
-          href="/info"
-          className={cn(
-            "flex flex-col items-center justify-center gap-1 p-2 transition-all",
-            pathname === "/info"
-              ? "text-purple-500"
-              : "text-zinc-500 hover:text-zinc-300"
-          )}
-        >
-          <Info className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Info</span>
-        </Link>
-
-        {/* Profile */}
-        <Link
-          href="/profile"
-          className={cn(
-            "flex flex-col items-center justify-center gap-1 p-2 transition-all",
-            pathname === "/profile"
-              ? "text-purple-500"
-              : "text-zinc-500 hover:text-zinc-300"
-          )}
-        >
-          <User className="w-5 h-5" />
-          <span className="text-[10px] font-medium">Profile</span>
-        </Link>
+          return (
+            <Link
+              key={item.href}
+              href={item.href}
+              className="relative flex items-center justify-center p-3 z-10"
+            >
+              {/* Animated background circle */}
+              {isActive && (
+                <motion.div
+                  layoutId="nav-indicator"
+                  className={cn(
+                    "absolute inset-0 rounded-full",
+                    item.isCenter
+                      ? "bg-purple-500"
+                      : "bg-zinc-800"
+                  )}
+                  transition={{
+                    type: "spring",
+                    stiffness: 400,
+                    damping: 30,
+                  }}
+                />
+              )}
+              {/* Icon */}
+              <motion.div
+                animate={{
+                  scale: isActive ? 1.15 : 1,
+                }}
+                transition={{
+                  type: "spring",
+                  stiffness: 400,
+                  damping: 25,
+                }}
+                className="relative z-10"
+              >
+                <Icon
+                  className={cn(
+                    "w-5 h-5 transition-colors",
+                    isActive
+                      ? item.isCenter
+                        ? "text-black"
+                        : "text-white"
+                      : "text-zinc-500"
+                  )}
+                />
+              </motion.div>
+            </Link>
+          );
+        })}
       </div>
     </nav>
   );
