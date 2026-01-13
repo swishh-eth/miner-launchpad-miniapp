@@ -29,16 +29,16 @@ export function NavBar() {
 
   return (
     <nav
-      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center"
+      className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none"
       style={{
         paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
       }}
     >
       {/* Pill container */}
-      <div className="flex items-center gap-1 bg-black border border-zinc-800 rounded-full px-2 py-2 shadow-lg shadow-black/50">
+      <div className="flex items-center gap-1 bg-black border border-purple-500/50 rounded-full px-2 py-2 shadow-lg shadow-purple-500/10 pointer-events-auto">
         {NAV_ITEMS.map((item, index) => {
           const isActive = index === activeIndex;
-          const isCenter = index === 1; // Explore is center
+          const isCenter = index === 1;
           const Icon = item.icon;
 
           return (
