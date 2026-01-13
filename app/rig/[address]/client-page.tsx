@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
 import { ArrowLeft, ArrowDownUp, Copy, Check, Share2 } from "lucide-react";
@@ -14,7 +14,6 @@ import {
 } from "wagmi";
 import { formatEther, formatUnits, parseUnits, type Address, zeroAddress } from "viem";
 
-import { NavBar } from "@/components/nav-bar";
 import { LazyPriceChart } from "@/components/lazy-price-chart";
 import type { HoverData } from "@/components/price-chart";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -42,10 +41,8 @@ import { cn } from "@/lib/utils";
 import { useSwapPrice, useSwapQuote, formatBuyAmount } from "@/hooks/useSwapQuote";
 import {
   DEFAULT_CHAIN_ID,
-  STALE_TIME_PROFILE_MS,
   DEADLINE_BUFFER_SECONDS,
   TOKEN_DECIMALS,
-  ipfsToHttp,
 } from "@/lib/constants";
 
 const formatUsd = (value: number, compact = false) => {
@@ -56,7 +53,6 @@ const formatUsd = (value: number, compact = false) => {
   return `$${value.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 };
 
-// Animated dots component for loading state
 function LoadingDots() {
   return (
     <span className="inline-flex">
@@ -67,7 +63,6 @@ function LoadingDots() {
   );
 }
 
-
 export default function RigDetailPage() {
   const params = useParams();
   const rigAddress = params.address as `0x${string}`;
@@ -75,7 +70,6 @@ export default function RigDetailPage() {
   const [customMessage, setCustomMessage] = useState("");
   const [mineResult, setMineResult] = useState<"success" | "failure" | null>(null);
 
-  // Use shared price hook (cached across components)
   const { ethUsdPrice, donutUsdPrice } = usePrices();
   const mineResultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [tradeResult, setTradeResult] = useState<"success" | "failure" | null>(null);
@@ -93,27 +87,21 @@ export default function RigDetailPage() {
   const priceRef = useRef<HTMLDivElement>(null);
   const headerRef = useRef<HTMLDivElement>(null);
 
-  // Trade mode state
   const [mode, setMode] = useState<"mine" | "trade">("mine");
-  const [tradeDirection, setTradeDirection] = useState<"buy" | "sell">("buy"); // buy = ETH -> Unit, sell = Unit -> ETH
+  const [tradeDirection, setTradeDirection] = useState<"buy" | "sell">("buy");
   const [tradeAmount, setTradeAmount] = useState("");
 
-  // Farcaster context and wallet connection
   const { address, isConnected, connect, user: farcasterUser } = useFarcaster();
 
-  // Rig data
   const { rigState, refetch: refetchRigState } = useRigState(rigAddress, address);
   const { rigInfo } = useRigInfo(rigAddress);
   const { stats: userStats } = useUserRigStats(address, rigAddress);
 
-  // Mining price history for chart (from subgraph epochs, in USD)
   const { priceHistory, isLoading: isLoadingPrice, timeframeSeconds, tokenFirstActiveTime } = usePriceHistory(rigAddress, selectedTimeframe, ethUsdPrice);
 
-  // DexScreener data for token price/market stats
   const { pairData, lpAddress } = useDexScreener(rigAddress, rigInfo?.unitAddress);
   const { mines: mineHistory } = useMineHistory(rigAddress, 10);
 
-  // Friend activity - get unique miner addresses and check for friends
   const minerAddresses = useMemo(() => {
     const uniqueAddrs = new Set<string>();
     mineHistory.forEach(mine => uniqueAddrs.add(mine.miner));
@@ -126,7 +114,6 @@ export default function RigDetailPage() {
   const { data: friendActivity } = useFriendActivity(minerAddresses, farcasterUser?.fid);
   const friendActivityMessage = friendActivity?.friends ? getFriendActivityMessage(friendActivity.friends) : null;
 
-  // Leaderboard with friend highlighting
   const friendFids = useMemo(() => {
     if (!friendActivity?.friends) return new Set<number>();
     return new Set(friendActivity.friends.map(f => f.fid));
@@ -139,10 +126,8 @@ export default function RigDetailPage() {
     10
   );
 
-  // Use cached metadata hook
   const { metadata: tokenMetadata, logoUrl: tokenLogoUrl } = useTokenMetadata(rigState?.rigUri);
 
-  // Token total supply
   const { data: totalSupplyRaw } = useReadContract({
     address: rigInfo?.unitAddress,
     abi: ERC20_ABI,
@@ -153,22 +138,18 @@ export default function RigDetailPage() {
     },
   });
 
-  // Transaction handling (mining)
   const { data: txHash, writeContract, isPending: isWriting, reset: resetWrite } = useWriteContract();
   const { data: receipt, isLoading: isConfirming } = useWaitForTransactionReceipt({ hash: txHash, chainId: DEFAULT_CHAIN_ID });
 
-  // Trade transaction handling - for buys (ETH -> Token, no approval needed)
   const { sendTransaction, isPending: isSwapping, data: swapTxHash } = useSendTransaction();
   const { isLoading: isWaitingSwap, isSuccess: swapSuccess, isError: swapError } = useWaitForTransactionReceipt({ hash: swapTxHash });
 
-  // Batched transaction handling - for sells (Token -> ETH, needs approval)
   const {
     execute: executeBatch,
     state: batchState,
     reset: resetBatch,
   } = useBatchedTransaction();
 
-  // Trade balances
   const { data: ethBalanceData, refetch: refetchEthBalance } = useBalance({
     address,
     chainId: DEFAULT_CHAIN_ID,
@@ -186,12 +167,10 @@ export default function RigDetailPage() {
     refetchUnitBalance();
   }, [refetchEthBalance, refetchUnitBalance]);
 
-  // Swap tokens for trading
   const sellToken = tradeDirection === "buy" ? NATIVE_ETH_ADDRESS : (rigInfo?.unitAddress || "");
   const buyToken = tradeDirection === "buy" ? (rigInfo?.unitAddress || "") : NATIVE_ETH_ADDRESS;
-  const sellDecimals = tradeDirection === "buy" ? 18 : 18; // ETH and unit tokens are both 18 decimals
+  const sellDecimals = 18;
 
-  // Get price quote
   const { data: tradePriceQuote, isLoading: isLoadingTradePrice, error: tradePriceError } = useSwapPrice({
     sellToken,
     buyToken,
@@ -200,20 +179,16 @@ export default function RigDetailPage() {
     enabled: mode === "trade" && !!rigInfo?.unitAddress && !!tradeAmount && parseFloat(tradeAmount) > 0,
   });
 
-  // Calculate output amount and price impact for auto slippage
   const tradeOutputAmountForSlippage = tradePriceQuote?.buyAmount
     ? formatBuyAmount(tradePriceQuote.buyAmount, 18)
     : "0";
 
-  // Auto slippage: price impact + 1%, minimum 1%, maximum 49%
   const slippage = useMemo(() => {
     if (!tradePriceQuote?.buyAmount || !tradeAmount || parseFloat(tradeAmount) === 0) return 1;
 
-    // Try Kyber's USD values first
     let inputUsd = tradePriceQuote?.sellAmountUsd ? parseFloat(tradePriceQuote.sellAmountUsd) : 0;
     let outputUsd = tradePriceQuote?.buyAmountUsd ? parseFloat(tradePriceQuote.buyAmountUsd) : 0;
 
-    // If Kyber doesn't have USD data, calculate ourselves
     if (inputUsd === 0 || outputUsd === 0) {
       const dexPrice = pairData?.priceUsd ? parseFloat(pairData.priceUsd) : null;
       const onChainPrice = rigState?.unitPrice && rigState.unitPrice > 0n
@@ -228,12 +203,10 @@ export default function RigDetailPage() {
     if (inputUsd === 0) return 2;
 
     const impact = ((inputUsd - outputUsd) / inputUsd) * 100;
-    // Add 2% buffer on top of price impact to account for price movement
     return Math.min(49, Math.max(2, Math.ceil(Math.max(0, impact)) + 2));
   }, [tradePriceQuote, tradeAmount, tradeOutputAmountForSlippage, tradeDirection, ethUsdPrice, pairData?.priceUsd, rigState?.unitPrice, donutUsdPrice]);
 
-  // Get full quote for trading
-  const { data: tradeQuote, isLoading: isLoadingTradeQuote, refetch: refetchTradeQuote } = useSwapQuote({
+  const { data: tradeQuote, isLoading: isLoadingTradeQuote } = useSwapQuote({
     sellToken,
     buyToken,
     sellAmount: tradeAmount || "0",
@@ -243,8 +216,6 @@ export default function RigDetailPage() {
     enabled: mode === "trade" && !!rigInfo?.unitAddress && !!tradeAmount && parseFloat(tradeAmount) > 0 && !!address,
   });
 
-
-  // Result handling
   const resetMineResult = useCallback(() => {
     if (mineResultTimeoutRef.current) {
       clearTimeout(mineResultTimeoutRef.current);
@@ -269,8 +240,6 @@ export default function RigDetailPage() {
     };
   }, []);
 
-
-  // Scroll handler for header ticker - show when price bottom gets covered by header
   useEffect(() => {
     const container = scrollContainerRef.current;
     const price = priceRef.current;
@@ -280,18 +249,15 @@ export default function RigDetailPage() {
     const handleScroll = () => {
       const priceRect = price.getBoundingClientRect();
       const headerRect = header.getBoundingClientRect();
-      // Show ticker when price bottom goes above the header bottom
       setShowHeaderTicker(priceRect.bottom < headerRect.bottom);
     };
 
-    // Run once on mount to set initial state
     handleScroll();
 
     container.addEventListener("scroll", handleScroll, { passive: true });
     return () => container.removeEventListener("scroll", handleScroll);
-  }, [rigInfo, rigState]); // Re-run when data loads
+  }, [rigInfo, rigState]);
 
-  // Handle receipt
   useEffect(() => {
     if (!receipt) return;
     if (receipt.status === "success" || receipt.status === "reverted") {
@@ -303,7 +269,6 @@ export default function RigDetailPage() {
     }
   }, [receipt, refetchRigState, resetWrite, showMineResult]);
 
-  // Interpolated mining values
   const [interpolatedGlazed, setInterpolatedGlazed] = useState<bigint | null>(null);
   const [glazeElapsedSeconds, setGlazeElapsedSeconds] = useState<number>(0);
 
@@ -335,7 +300,6 @@ export default function RigDetailPage() {
     return () => clearInterval(interval);
   }, [rigState]);
 
-  // Mine handler
   const handleMine = useCallback(async () => {
     if (!rigState) return;
     resetMineResult();
@@ -351,7 +315,6 @@ export default function RigDetailPage() {
       const maxPrice = price === 0n ? 0n : (price * 105n) / 100n;
       const messageToSend = customMessage.trim() || tokenMetadata?.defaultMessage || "gm";
 
-      // Store mine details for sharing after success
       setLastMineDetails({
         priceSpent: Number(formatEther(price)).toFixed(6),
         message: messageToSend,
@@ -374,13 +337,11 @@ export default function RigDetailPage() {
     }
   }, [address, connect, customMessage, rigState, rigAddress, resetMineResult, resetWrite, showMineResult, writeContract, tokenMetadata]);
 
-  // Share mining achievement handler
   const handleShareMine = useCallback(async () => {
     if (!rigInfo) return;
 
     const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
 
-    // Use current session mined amount or estimate from mining rate
     const currentGlazed = interpolatedGlazed ?? rigState?.glazed ?? 0n;
     const minedAmount = currentGlazed > 0n
       ? Number(formatUnits(currentGlazed, TOKEN_DECIMALS)).toLocaleString(undefined, { maximumFractionDigits: 0 })
@@ -397,12 +358,10 @@ export default function RigDetailPage() {
     });
   }, [rigInfo, rigAddress, rigState?.glazed, rigState?.nextUps, interpolatedGlazed, customMessage]);
 
-  // Trade handlers
   const handleTrade = useCallback(async () => {
     if (!tradeQuote?.transaction || !address || !tradeAmount) return;
 
     if (tradeDirection === "sell" && rigInfo?.unitAddress) {
-      // Sells: use batched transaction (approve + swap)
       const sellAmountWei = parseUnits(tradeAmount, 18);
       const approveCall = encodeApproveCall(
         rigInfo.unitAddress as Address,
@@ -422,7 +381,6 @@ export default function RigDetailPage() {
         console.error("Trade failed:", error);
       }
     } else {
-      // Buys: no approval needed, just swap directly
       sendTransaction({
         to: tradeQuote.transaction.to as Address,
         data: tradeQuote.transaction.data as `0x${string}`,
@@ -432,15 +390,12 @@ export default function RigDetailPage() {
     }
   }, [tradeQuote, address, tradeAmount, tradeDirection, rigInfo?.unitAddress, executeBatch, sendTransaction]);
 
-  // Track last processed swap hash to detect new successful swaps
   const lastProcessedSwapHash = useRef<string | null>(null);
 
-  // Handle swap result (for buys via sendTransaction)
   useEffect(() => {
     if (swapSuccess && swapTxHash && swapTxHash !== lastProcessedSwapHash.current) {
       lastProcessedSwapHash.current = swapTxHash;
       setTradeAmount("");
-      // Refetch immediately, then again after delays to handle RPC lag
       refetchBalances();
       refetchRigState();
       setTimeout(() => {
@@ -460,10 +415,8 @@ export default function RigDetailPage() {
     }
   }, [swapSuccess, swapTxHash, refetchBalances, refetchRigState]);
 
-  // Track last processed error hash
   const lastProcessedErrorHash = useRef<string | null>(null);
 
-  // Handle swap failure (for buys via sendTransaction)
   useEffect(() => {
     if (swapError && swapTxHash && swapTxHash !== lastProcessedErrorHash.current) {
       lastProcessedErrorHash.current = swapTxHash;
@@ -476,12 +429,10 @@ export default function RigDetailPage() {
     }
   }, [swapError, swapTxHash]);
 
-  // Handle batched transaction result (for sells)
   useEffect(() => {
     if (batchState === "success") {
       setTradeAmount("");
       resetBatch();
-      // Refetch immediately, then again after delays to handle RPC lag
       refetchBalances();
       refetchRigState();
       setTimeout(() => {
@@ -509,23 +460,18 @@ export default function RigDetailPage() {
     }
   }, [batchState, resetBatch, refetchBalances, refetchRigState]);
 
-  // Trade calculations
   const tradeBalance = tradeDirection === "buy" ? ethBalanceData : unitBalanceData;
   const tradeOutputAmount = tradePriceQuote?.buyAmount
     ? formatBuyAmount(tradePriceQuote.buyAmount, 18)
     : "0";
   const formattedTradeOutput = parseFloat(tradeOutputAmount).toLocaleString(undefined, { maximumFractionDigits: 6 });
 
-  // Calculate price impact for display
   const priceImpact = useMemo(() => {
-    // No quote yet = loading
     if (!tradePriceQuote?.buyAmount || !tradeAmount || parseFloat(tradeAmount) === 0) return null;
 
-    // Try Kyber's USD values first
     let inputUsd = tradePriceQuote?.sellAmountUsd ? parseFloat(tradePriceQuote.sellAmountUsd) : 0;
     let outputUsd = tradePriceQuote?.buyAmountUsd ? parseFloat(tradePriceQuote.buyAmountUsd) : 0;
 
-    // If Kyber doesn't have USD data, calculate ourselves (same as UI display)
     if (inputUsd === 0 || outputUsd === 0) {
       const dexPrice = pairData?.priceUsd ? parseFloat(pairData.priceUsd) : null;
       const onChainPrice = rigState?.unitPrice && rigState.unitPrice > 0n
@@ -540,7 +486,7 @@ export default function RigDetailPage() {
     if (inputUsd === 0) return null;
 
     const impact = ((inputUsd - outputUsd) / inputUsd) * 100;
-    return Math.max(0, impact); // Don't show negative impact
+    return Math.max(0, impact);
   }, [tradePriceQuote, tradeAmount, tradeOutputAmount, tradeDirection, ethUsdPrice, pairData?.priceUsd, rigState?.unitPrice, donutUsdPrice]);
 
   const tradeInsufficientBalance = useMemo(() => {
@@ -569,10 +515,8 @@ export default function RigDetailPage() {
   const tokenSymbol = rigInfo?.tokenSymbol ?? "TOKEN";
   const tokenName = rigInfo?.tokenName ?? "Loading...";
 
-  // Check if there's no liquidity
   const hasNoLiquidity = tradePriceError || (tradeAmount && parseFloat(tradeAmount) > 0 && !isLoadingTradePrice && !tradePriceQuote?.buyAmount);
 
-  // Trade button text (after tokenSymbol is defined)
   const tradeButtonText = useMemo(() => {
     if (tradeResult === "success") return "Trade successful!";
     if (tradeResult === "failure") return "Trade failed";
@@ -588,7 +532,6 @@ export default function RigDetailPage() {
 
   const canTrade = isConnected && tradeAmount && parseFloat(tradeAmount) > 0 && !tradeInsufficientBalance && !isTradeLoading && !hasNoLiquidity && !!tradeQuote?.transaction?.to;
 
-  // Calculate values - unitPrice is in DONUT, so use donutUsdPrice
   const glazedAmount = interpolatedGlazed ?? rigState?.glazed ?? 0n;
   const unitPrice = rigState?.unitPrice ?? 0n;
   const glazedUsd = unitPrice > 0n
@@ -599,10 +542,8 @@ export default function RigDetailPage() {
     : 0;
   const priceUsd = rigState ? Number(formatEther(rigState.price)) * ethUsdPrice : 0;
   const priceEth = rigState ? Number(formatEther(rigState.price)) : 0;
-  // Token price in USD (unitPrice is in DONUT)
   const tokenPriceUsd = unitPrice > 0n ? Number(formatEther(unitPrice)) * donutUsdPrice : 0;
 
-  // Token stats - prefer DexScreener data when available
   const totalSupply = totalSupplyRaw ? Number(formatUnits(totalSupplyRaw as bigint, TOKEN_DECIMALS)) : 0;
   const dexPriceUsd = pairData?.priceUsd ? parseFloat(pairData.priceUsd) : null;
   const displayPriceUsd = dexPriceUsd ?? tokenPriceUsd;
@@ -610,12 +551,10 @@ export default function RigDetailPage() {
   const liquidity = pairData?.liquidity?.usd ?? 0;
   const volume24h = pairData?.volume?.h24 ?? 0;
 
-  // User balances - unitPrice is in DONUT
   const unitBalance = rigState?.unitBalance ? Number(formatUnits(rigState.unitBalance, TOKEN_DECIMALS)) : 0;
   const unitBalanceUsd = unitPrice > 0n ? unitBalance * Number(formatEther(unitPrice)) * donutUsdPrice : 0;
   const ethBalance = rigState?.ethBalance ? Number(formatEther(rigState.ethBalance)) : 0;
 
-  // User stats from subgraph
   const totalMined = userStats?.totalMined ? Number(formatUnits(userStats.totalMined, TOKEN_DECIMALS)) : 0;
   const totalMinedUsd = unitPrice > 0n ? totalMined * Number(formatEther(unitPrice)) * donutUsdPrice : 0;
   const totalSpent = userStats?.totalSpent ? Number(formatEther(userStats.totalSpent)) : 0;
@@ -627,7 +566,6 @@ export default function RigDetailPage() {
   const hasMiner = minerAddress !== zeroAddress;
   const isCurrentUserMiner = address && minerAddress.toLowerCase() === address.toLowerCase();
 
-  // Use cached profile hooks
   const {
     displayName: minerDisplayName,
     avatarUrl: minerAvatarUrl,
@@ -662,21 +600,34 @@ export default function RigDetailPage() {
     return `${Math.floor(diff / 604800)}w ago`;
   };
 
-  const handleCopyAddress = useCallback(async (address: string) => {
+  const handleCopyAddress = useCallback(async (addr: string) => {
     try {
-      await navigator.clipboard.writeText(address);
-      setCopiedAddress(address);
+      await navigator.clipboard.writeText(addr);
+      setCopiedAddress(addr);
       setTimeout(() => setCopiedAddress(null), 2000);
     } catch (err) {
       console.error("Failed to copy:", err);
     }
   }, []);
 
-  // Chart data from DexScreener
   const chartData = priceHistory;
 
-  // Show nothing until essential data is ready
   const isPageLoading = !rigInfo || !rigState;
+
+  // Helper function to get link label
+  const getLinkLabel = (link: string): string => {
+    const url = link.startsWith("http") ? link : `https://${link}`;
+    try {
+      const hostname = new URL(url).hostname.replace("www.", "");
+      if (hostname.includes("twitter") || hostname.includes("x.com")) return "Twitter";
+      if (hostname.includes("telegram") || hostname.includes("t.me")) return "Telegram";
+      if (hostname.includes("discord")) return "Discord";
+      if (hostname.includes("github")) return "GitHub";
+      return hostname.split(".")[0].charAt(0).toUpperCase() + hostname.split(".")[0].slice(1);
+    } catch {
+      return "Link";
+    }
+  };
 
   if (isPageLoading) {
     return (
@@ -688,7 +639,6 @@ export default function RigDetailPage() {
             paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)",
           }}
         />
-        <NavBar />
       </main>
     );
   }
@@ -699,7 +649,6 @@ export default function RigDetailPage() {
         className="relative flex h-full w-full max-w-[520px] flex-1 flex-col overflow-hidden bg-black"
         style={{
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
-          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 72px)",
         }}
       >
         {/* Fixed Header */}
@@ -708,7 +657,6 @@ export default function RigDetailPage() {
             <Link href="/explore" className="p-1 -ml-1 hover:opacity-70 transition-opacity z-10">
               <ArrowLeft className="h-5 w-5 text-purple-500" />
             </Link>
-            {/* Center ticker - absolutely positioned for true centering */}
             <div
               className={cn(
                 "absolute left-1/2 -translate-x-1/2 text-center transition-opacity duration-200",
@@ -718,7 +666,6 @@ export default function RigDetailPage() {
               <div className="text-xs font-medium text-white">{tokenName}</div>
               <div className="text-xs text-zinc-400">${displayPriceUsd.toFixed(6)}</div>
             </div>
-            {/* Mode Toggle Button */}
             <button
               onClick={() => {
                 setMode(mode === "mine" ? "trade" : "mine");
@@ -742,7 +689,6 @@ export default function RigDetailPage() {
                 <span className="text-2xl font-bold">${displayPriceUsd.toFixed(6)}</span>
               </div>
             </div>
-            {/* Token Logo */}
             <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-900 flex items-center justify-center flex-shrink-0">
               {tokenLogoUrl ? (
                 <img src={tokenLogoUrl} alt={tokenSymbol} className="w-12 h-12 object-cover rounded-xl" />
@@ -757,7 +703,6 @@ export default function RigDetailPage() {
             <div className="flex items-center justify-between px-2 mb-2">
               <span className="text-xs text-zinc-500">Mine Cost</span>
               {(() => {
-                // Use hover data if available, otherwise use latest data point
                 const displayData = chartHover ?? (chartData.length > 0 ? chartData[chartData.length - 1] : null);
                 if (!displayData) {
                   return <span className="text-xs text-zinc-600">USD</span>;
@@ -824,7 +769,6 @@ export default function RigDetailPage() {
                         setCopiedLink(true);
                         setTimeout(() => setCopiedLink(false), 2000);
                       } catch {
-                        // Fallback for environments where clipboard API is restricted
                         const textArea = document.createElement("textarea");
                         textArea.value = rigUrl;
                         textArea.style.position = "fixed";
@@ -988,73 +932,65 @@ export default function RigDetailPage() {
 
             {/* Links */}
             <div className="flex flex-wrap gap-2">
-              {/* New format: links array */}
-              {tokenMetadata?.links?.map((link, index) => {
-                const url = link.startsWith("http") ? link : `https://${link}`;
-                // Extract display name from URL
-                let label = "Link";
-                try {
-                  const hostname = new URL(url).hostname.replace("www.", "");
-                  if (hostname.includes("twitter") || hostname.includes("x.com")) label = "Twitter";
-                  else if (hostname.includes("telegram") || hostname.includes("t.me")) label = "Telegram";
-                  else if (hostname.includes("discord")) label = "Discord";
-                  else if (hostname.includes("github")) label = "GitHub";
-                  else label = hostname.split(".")[0].charAt(0).toUpperCase() + hostname.split(".")[0].slice(1);
-                } catch {
-                  label = "Link";
-                }
-                return (
-                  <a
-                    key={index}
-                    href={url}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                  >
-                    {label}
-                  </a>
-                );
-              })}
-              {/* Legacy format support */}
-              {!tokenMetadata?.links?.length && tokenMetadata?.website && (
-                <a
-                  href={tokenMetadata.website.startsWith("http") ? tokenMetadata.website : `https://${tokenMetadata.website}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                >
-                  Website
-                </a>
-              )}
-              {!tokenMetadata?.links?.length && tokenMetadata?.twitter && (
-                <a
-                  href={`https://x.com/${tokenMetadata.twitter}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                >
-                  Twitter
-                </a>
-              )}
-              {!tokenMetadata?.links?.length && tokenMetadata?.telegram && (
-                <a
-                  href={`https://t.me/${tokenMetadata.telegram}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                >
-                  Telegram
-                </a>
-              )}
-              {!tokenMetadata?.links?.length && tokenMetadata?.discord && (
-                <a
-                  href={tokenMetadata.discord.startsWith("http") ? tokenMetadata.discord : `https://discord.gg/${tokenMetadata.discord}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
-                >
-                  Discord
-                </a>
+              {tokenMetadata?.links && tokenMetadata.links.length > 0 ? (
+                tokenMetadata.links.map((link: string, index: number) => {
+                  const url = link.startsWith("http") ? link : `https://${link}`;
+                  const label = getLinkLabel(link);
+                  return (
+                    <a
+                      key={index}
+                      href={url}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    >
+                      {label}
+                    </a>
+                  );
+                })
+              ) : (
+                <>
+                  {tokenMetadata?.website && (
+                    <a
+                      href={tokenMetadata.website.startsWith("http") ? tokenMetadata.website : `https://${tokenMetadata.website}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    >
+                      Website
+                    </a>
+                  )}
+                  {tokenMetadata?.twitter && (
+                    <a
+                      href={`https://x.com/${tokenMetadata.twitter}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    >
+                      Twitter
+                    </a>
+                  )}
+                  {tokenMetadata?.telegram && (
+                    <a
+                      href={`https://t.me/${tokenMetadata.telegram}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    >
+                      Telegram
+                    </a>
+                  )}
+                  {tokenMetadata?.discord && (
+                    <a
+                      href={tokenMetadata.discord.startsWith("http") ? tokenMetadata.discord : `https://discord.gg/${tokenMetadata.discord}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="px-3 py-1 text-xs rounded-full bg-zinc-800 text-zinc-300 hover:bg-zinc-700"
+                    >
+                      Discord
+                    </a>
+                  )}
+                </>
               )}
               {rigInfo?.unitAddress && (
                 <button
@@ -1085,7 +1021,7 @@ export default function RigDetailPage() {
             </div>
           </div>
 
-          {/* Stats - Memoized component */}
+          {/* Stats */}
           <TokenStats
             marketCap={marketCap}
             totalSupply={totalSupply}
@@ -1145,13 +1081,18 @@ export default function RigDetailPage() {
             </div>
           </div>
 
-          {/* Spacer for bottom bar - taller in trade mode */}
-          <div className={mode === "trade" ? "h-96" : "h-32"} />
+          {/* Spacer for bottom bar */}
+          <div className={mode === "trade" ? "h-96" : "h-48"} />
         </div>
 
         {/* Bottom Action Bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-black/95 backdrop-blur-sm">
-          <div className="max-w-[520px] mx-auto px-2 pt-3 pb-[calc(env(safe-area-inset-bottom,0px)+72px)]">
+        <div className="fixed bottom-0 left-0 right-0 bg-purple-500">
+          <div
+            className="max-w-[520px] mx-auto px-3 pt-3"
+            style={{
+              paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
+            }}
+          >
             {mode === "mine" ? (
               <>
                 <input
@@ -1160,17 +1101,17 @@ export default function RigDetailPage() {
                   onChange={(e) => setCustomMessage(e.target.value)}
                   placeholder="Add a message..."
                   maxLength={100}
-                  className="w-full rounded-lg bg-zinc-900 px-3 py-2 text-sm text-white placeholder-zinc-600 focus:outline-none disabled:opacity-40 mb-2"
+                  className="w-full rounded-lg bg-purple-600/50 border border-purple-400/30 px-3 py-2 text-sm text-white placeholder-purple-200/50 focus:outline-none focus:border-purple-300 disabled:opacity-40 mb-2"
                   disabled={isMineDisabled}
                 />
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1">
-                    <div className="text-xs text-zinc-500 mb-1">Mine price</div>
-                    <div className="text-lg font-semibold">Ξ{priceEth.toFixed(6)}</div>
-                    <div className="text-xs text-zinc-600">{formatUsd(priceUsd)}</div>
+                    <div className="text-xs text-purple-200 mb-1">Mine price</div>
+                    <div className="text-lg font-semibold text-white">Ξ{priceEth.toFixed(6)}</div>
+                    <div className="text-xs text-purple-200">{formatUsd(priceUsd)}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] text-zinc-500 mb-1">
+                    <div className="text-[10px] text-purple-200 mb-1">
                       Balance: Ξ{ethBalance.toFixed(4)}
                     </div>
                     <div className="flex items-center gap-2 justify-end">
@@ -1181,7 +1122,7 @@ export default function RigDetailPage() {
                           "w-[calc(50vw-16px)] max-w-[244px] py-2.5 rounded-lg font-semibold transition-all text-sm",
                           mineResult === "failure"
                             ? "bg-zinc-700 text-white"
-                            : "bg-purple-500 text-black hover:bg-purple-600 active:scale-[0.98]",
+                            : "bg-white text-black hover:bg-gray-100 active:scale-[0.98]",
                           isMineDisabled && !mineResult && "opacity-40 cursor-not-allowed"
                         )}
                       >
@@ -1193,11 +1134,10 @@ export default function RigDetailPage() {
               </>
             ) : (
               <>
-                {/* Trade Mode UI */}
                 {/* Trade Input */}
-                <div className="bg-zinc-900 rounded-xl p-3">
+                <div className="bg-purple-600/50 border border-purple-400/30 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-zinc-500">You pay</span>
+                    <span className="text-xs text-purple-200">You pay</span>
                     {tradeBalance && (
                       <button
                         onClick={() => {
@@ -1208,20 +1148,20 @@ export default function RigDetailPage() {
                             setTradeAmount(formatUnits(unitBalanceData.value, 18));
                           }
                         }}
-                        className="text-xs text-zinc-500 hover:text-zinc-400"
+                        className="text-xs text-purple-200 hover:text-white"
                       >
                         Balance: {parseFloat(formatUnits(tradeBalance.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 })}
                       </button>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-800 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-purple-700/50 flex items-center justify-center">
                       {tradeDirection === "buy" ? (
                         <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
                       ) : tokenLogoUrl ? (
                         <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-xs font-bold text-purple-500">{tokenSymbol.slice(0, 2)}</span>
+                        <span className="text-xs font-bold text-white">{tokenSymbol.slice(0, 2)}</span>
                       )}
                     </div>
                     <input
@@ -1229,13 +1169,13 @@ export default function RigDetailPage() {
                       value={tradeAmount}
                       onChange={(e) => setTradeAmount(e.target.value)}
                       placeholder="0"
-                      className="flex-1 min-w-0 bg-transparent text-xl font-semibold focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-white placeholder-purple-200/50 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
-                    <span className="shrink-0 text-sm font-semibold text-zinc-400">
+                    <span className="shrink-0 text-sm font-semibold text-purple-200">
                       {tradeDirection === "buy" ? "ETH" : tokenSymbol}
                     </span>
                   </div>
-                  <div className="text-xs text-zinc-600 mt-1">
+                  <div className="text-xs text-purple-200 mt-1">
                     {tradeAmount && parseFloat(tradeAmount) > 0
                       ? `$${(parseFloat(tradeAmount) * (tradeDirection === "buy" ? ethUsdPrice : displayPriceUsd)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                       : "$0.00"}
@@ -1249,17 +1189,17 @@ export default function RigDetailPage() {
                       setTradeDirection(tradeDirection === "buy" ? "sell" : "buy");
                       setTradeAmount("");
                     }}
-                    className="bg-zinc-700 hover:bg-zinc-600 p-2 rounded-xl border-4 border-black transition-colors"
+                    className="bg-purple-700 hover:bg-purple-800 p-2 rounded-xl border-4 border-purple-500 transition-colors"
                   >
-                    <ArrowDownUp className="w-4 h-4" />
+                    <ArrowDownUp className="w-4 h-4 text-white" />
                   </button>
                 </div>
 
                 {/* Trade Output */}
-                <div className="bg-zinc-900/50 rounded-xl p-3">
+                <div className="bg-purple-600/30 border border-purple-400/20 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-zinc-500">You receive</span>
-                    <span className="text-xs text-zinc-500">
+                    <span className="text-xs text-purple-200">You receive</span>
+                    <span className="text-xs text-purple-200">
                       Balance: {tradeDirection === "buy"
                         ? (unitBalanceData ? parseFloat(formatUnits(unitBalanceData.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0")
                         : (ethBalanceData ? parseFloat(formatUnits(ethBalanceData.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0")
@@ -1267,18 +1207,18 @@ export default function RigDetailPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-800 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-purple-700/50 flex items-center justify-center">
                       {tradeDirection === "buy" ? (
                         tokenLogoUrl ? (
                           <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-xs font-bold text-purple-500">{tokenSymbol.slice(0, 2)}</span>
+                          <span className="text-xs font-bold text-white">{tokenSymbol.slice(0, 2)}</span>
                         )
                       ) : (
                         <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
                       )}
                     </div>
-                    <div className="flex-1 text-xl font-semibold text-zinc-300">
+                    <div className="flex-1 text-xl font-semibold text-white">
                       {isTradeLoading && tradeAmount ? (
                         <span className="inline-flex items-center gap-0.5">
                           <span className="animate-bounce-dot-1">•</span>
@@ -1287,11 +1227,11 @@ export default function RigDetailPage() {
                         </span>
                       ) : formattedTradeOutput}
                     </div>
-                    <span className="shrink-0 text-sm font-semibold text-zinc-400">
+                    <span className="shrink-0 text-sm font-semibold text-purple-200">
                       {tradeDirection === "buy" ? tokenSymbol : "ETH"}
                     </span>
                   </div>
-                  <div className="text-xs text-zinc-600 mt-1">
+                  <div className="text-xs text-purple-200 mt-1">
                     {parseFloat(tradeOutputAmount) > 0
                       ? `$${(parseFloat(tradeOutputAmount) * (tradeDirection === "buy" ? displayPriceUsd : ethUsdPrice)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                       : "$0.00"}
@@ -1299,7 +1239,7 @@ export default function RigDetailPage() {
                 </div>
 
                 {/* Trade Info */}
-                <div className="flex justify-between text-xs text-zinc-500 px-1 py-2">
+                <div className="flex justify-between text-xs text-purple-200 px-1 py-2">
                   <span>Min. received</span>
                   <span>
                     {tradePriceQuote?.buyAmount
@@ -1309,10 +1249,10 @@ export default function RigDetailPage() {
                   </span>
                 </div>
                 <div className="flex justify-between text-xs px-1 pb-3">
-                  <span className="text-zinc-500">Price impact / Slippage</span>
+                  <span className="text-purple-200">Price impact / Slippage</span>
                   <span className={cn(
-                    priceImpact !== null && priceImpact > 10 ? "text-red-500" :
-                    priceImpact !== null && priceImpact > 5 ? "text-yellow-500" : "text-zinc-500"
+                    priceImpact !== null && priceImpact > 10 ? "text-red-300" :
+                    priceImpact !== null && priceImpact > 5 ? "text-yellow-300" : "text-purple-200"
                   )}>
                     {priceImpact !== null && priceImpact > 5 && "⚠️ "}
                     {priceImpact !== null ? `${priceImpact.toFixed(2)}%` : "—"} / {slippage}%
@@ -1324,7 +1264,7 @@ export default function RigDetailPage() {
                   onClick={handleTrade}
                   disabled={!canTrade || isTradePending || tradeResult !== null}
                   className={cn(
-                    "w-full py-3 rounded-lg font-semibold transition-all text-sm bg-purple-500 text-black hover:bg-purple-600",
+                    "w-full py-3 rounded-lg font-semibold transition-all text-sm bg-white text-black hover:bg-gray-100",
                     (!canTrade || isTradePending || tradeResult !== null) && "cursor-not-allowed",
                     (!canTrade || isTradePending) && tradeResult === null && "opacity-40"
                   )}
@@ -1334,7 +1274,7 @@ export default function RigDetailPage() {
 
                 {/* No Liquidity Message */}
                 {hasNoLiquidity && tradeAmount && parseFloat(tradeAmount) > 0 && (
-                  <div className="mt-2 text-center text-xs text-zinc-500">
+                  <div className="mt-2 text-center text-xs text-purple-200">
                     This token may only be tradeable on its native DEX
                   </div>
                 )}
@@ -1343,7 +1283,6 @@ export default function RigDetailPage() {
           </div>
         </div>
       </div>
-      <NavBar />
     </main>
   );
 }

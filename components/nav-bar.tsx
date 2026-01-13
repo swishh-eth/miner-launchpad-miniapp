@@ -44,10 +44,9 @@ export function NavBar() {
       : pathname === item.href
   );
 
-  const activeItem = NAV_ITEMS[activeIndex] || NAV_ITEMS[1]; // Default to explore
+  const activeItem = NAV_ITEMS[activeIndex] || NAV_ITEMS[1];
   const ActiveIcon = activeItem.icon;
 
-  // Filter out current page from the list
   const navItemsToShow = NAV_ITEMS.filter((_, index) => index !== activeIndex);
 
   const toggleExpanded = useCallback(() => {
@@ -79,7 +78,8 @@ export function NavBar() {
 
   const isLeft = position === "bottom-left";
 
-  if (!mounted) {
+  // Don't render on rig pages or before mount
+  if (!mounted || isRigPage) {
     return null;
   }
 
