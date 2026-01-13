@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useCallback } from "react";
+import { useState, useCallback, useEffect } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
@@ -26,6 +26,18 @@ export function NavBar() {
 
   const [isExpanded, setIsExpanded] = useState(false);
   const [position, setPosition] = useState<Position>("bottom-right");
+  const [mounted, setMounted] = useState(false);
+  const [screenWidth, setScreenWidth] = useState(0);
+
+  // Only run on client
+  useEffect(() => {
+    setMounted(true);
+    setScreenWidth(window.innerWidth);
+
+    const handleResize = () => setScreenWidth(window.innerWidth);
+    window.addEventListener("resize", handleResize);
+    return () => window.removeEventListener("resize", handleResize);
+  }, []);
 
   const activeIndex = NAV_ITEMS.findIndex((item) =>
     item.href === "/explore"
@@ -40,14 +52,23 @@ export function NavBar() {
     setIsExpanded((prev) => !prev);
   }, []);
 
-  const handleDragEnd = useCallback((event: any, info: any) => {
-    // Determine if dragged to opposite side
-    const screenMidpoint = window.innerWidth / 2;
-    const newPosition = info.point.x < screenMidpoint ? "bottom-left" : "bottom-right";
-    setPosition(newPosition);
-  }, []);
+  const handleDragEnd = useCallback(
+    (event: MouseEvent | TouchEvent | PointerEvent, info: { point: { x: number; y: number } }) => {
+      if (screenWidth === 0) return;
+      const screenMidpoint = screenWidth / 2;
+      const newPosition = info.point.x < screenMidpoint ? "bottom-left" : "bottom-right";
+      setPosition(newPosition);
+      setIsExpanded(false);
+    },
+    [screenWidth]
+  );
 
   const isLeft = position === "bottom-left";
+
+  // Don't render until mounted (client-side)
+  if (!mounted) {
+    return null;
+  }
 
   return (
     <>
@@ -60,50 +81,31 @@ export function NavBar() {
       />
 
       {/* Nav container */}
-      <motion.div
-        drag
-        dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-        dragElastic={0.1}
-        onDragEnd={handleDragEnd}
-        animate={{
-          x: isLeft ? 16 : window.innerWidth - 72 - 16,
-        }}
-        transition={{
-          type: "spring",
-          stiffness: 400,
-          damping: 30,
-        }}
-        className="fixed z-50"
+      <div
+        className={cn(
+          "fixed z-50 flex items-center",
+          isLeft ? "left-4 flex-row" : "right-4 flex-row-reverse"
+        )}
         style={{
           bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
         }}
       >
         <div className={cn("flex items-center gap-1", isLeft ? "flex-row" : "flex-row-reverse")}>
-          {/* Main button (always visible) */}
-          <motion.button
-            onClick={toggleExpanded}
-            whileHover={{ scale: 1.05 }}
-            whileTap={{ scale: 0.95 }}
-            className="w-14 h-14 rounded-full bg-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/30 border-2 border-purple-400 cursor-grab active:cursor-grabbing"
-          >
-            <ActiveIcon className="w-6 h-6 text-black" />
-          </motion.button>
-
           {/* Expandable buttons */}
           <AnimatePresence>
             {isExpanded && (
               <motion.div
-                initial={{ width: 0, opacity: 0 }}
-                animate={{ width: "auto", opacity: 1 }}
-                exit={{ width: 0, opacity: 0 }}
+                initial={{ width: 0, opacity: 0, scale: 0.8 }}
+                animate={{ width: "auto", opacity: 1, scale: 1 }}
+                exit={{ width: 0, opacity: 0, scale: 0.8 }}
                 transition={{
                   type: "spring",
-                  stiffness: 400,
-                  damping: 30,
+                  stiffness: 500,
+                  damping: 35,
                 }}
                 className={cn(
-                  "flex items-center gap-1 overflow-hidden bg-black border border-purple-500/50 rounded-full px-1 py-1",
-                  isLeft ? "flex-row" : "flex-row-reverse"
+                  "flex items-center overflow-hidden bg-black/90 backdrop-blur-sm border border-purple-500/50 rounded-full px-1 py-1",
+                  isLeft ? "flex-row ml-2" : "flex-row-reverse mr-2"
                 )}
               >
                 {NAV_ITEMS.map((item, index) => {
@@ -120,7 +122,7 @@ export function NavBar() {
                       {isActive && (
                         <motion.div
                           layoutId="nav-active"
-                          className="absolute inset-0 rounded-full bg-purple-500/30"
+                          className="absolute inset-0 rounded-full bg-purple-500"
                           transition={{
                             type: "spring",
                             stiffness: 400,
@@ -130,8 +132,8 @@ export function NavBar() {
                       )}
                       <Icon
                         className={cn(
-                          "w-5 h-5 relative z-10",
-                          isActive ? "text-purple-400" : "text-zinc-500"
+                          "w-5 h-5 relative z-10 transition-colors",
+                          isActive ? "text-black" : "text-zinc-400"
                         )}
                       />
                     </Link>
@@ -140,8 +142,22 @@ export function NavBar() {
               </motion.div>
             )}
           </AnimatePresence>
+
+          {/* Main button (always visible) - draggable */}
+          <motion.button
+            drag
+            dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
+            dragElastic={0.2}
+            onDragEnd={handleDragEnd}
+            onClick={toggleExpanded}
+            whileHover={{ scale: 1.05 }}
+            whileTap={{ scale: 0.95 }}
+            className="w-14 h-14 rounded-full bg-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/30 border-2 border-purple-400 cursor-grab active:cursor-grabbing touch-none"
+          >
+            <ActiveIcon className="w-6 h-6 text-black" />
+          </motion.button>
         </div>
-      </motion.div>
+      </div>
     </>
   );
 }
