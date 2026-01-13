@@ -1,9 +1,9 @@
 "use client";
 
-import { useState, useCallback, useEffect } from "react";
+import { useState, useCallback, useEffect, useRef } from "react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, AnimatePresence, useMotionValue, useTransform, animate } from "framer-motion";
 import { cn } from "@/lib/utils";
 import { Search, Rocket, Gavel } from "lucide-react";
 
@@ -27,16 +27,13 @@ export function NavBar() {
   const [isExpanded, setIsExpanded] = useState(false);
   const [position, setPosition] = useState<Position>("bottom-right");
   const [mounted, setMounted] = useState(false);
-  const [screenWidth, setScreenWidth] = useState(0);
+  const [isDragging, setIsDragging] = useState(false);
+  
+  const containerRef = useRef<HTMLDivElement>(null);
+  const x = useMotionValue(0);
 
-  // Only run on client
   useEffect(() => {
     setMounted(true);
-    setScreenWidth(window.innerWidth);
-
-    const handleResize = () => setScreenWidth(window.innerWidth);
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
   }, []);
 
   const activeIndex = NAV_ITEMS.findIndex((item) =>
@@ -49,23 +46,41 @@ export function NavBar() {
   const ActiveIcon = activeItem?.icon || Search;
 
   const toggleExpanded = useCallback(() => {
-    setIsExpanded((prev) => !prev);
+    if (!isDragging) {
+      setIsExpanded((prev) => !prev);
+    }
+  }, [isDragging]);
+
+  const handleDragStart = useCallback(() => {
+    setIsDragging(true);
   }, []);
 
+  const handleDrag = useCallback((event: any, info: any) => {
+    // Update x motion value for smooth tracking
+    x.set(info.offset.x);
+  }, [x]);
+
   const handleDragEnd = useCallback(
-    (event: MouseEvent | TouchEvent | PointerEvent, info: { point: { x: number; y: number } }) => {
-      if (screenWidth === 0) return;
-      const screenMidpoint = screenWidth / 2;
-      const newPosition = info.point.x < screenMidpoint ? "bottom-left" : "bottom-right";
-      setPosition(newPosition);
-      setIsExpanded(false);
+    (event: any, info: any) => {
+      const threshold = 50; // pixels needed to switch sides
+      
+      if (position === "bottom-right" && info.offset.x < -threshold) {
+        setPosition("bottom-left");
+      } else if (position === "bottom-left" && info.offset.x > threshold) {
+        setPosition("bottom-right");
+      }
+      
+      // Reset x position with animation
+      animate(x, 0, { type: "spring", stiffness: 400, damping: 30 });
+      
+      // Small delay before allowing clicks again
+      setTimeout(() => setIsDragging(false), 100);
     },
-    [screenWidth]
+    [position, x]
   );
 
   const isLeft = position === "bottom-left";
 
-  // Don't render until mounted (client-side)
   if (!mounted) {
     return null;
   }
@@ -81,62 +96,72 @@ export function NavBar() {
       />
 
       {/* Nav container */}
-      <div
+      <motion.div
+        ref={containerRef}
         className={cn(
-          "fixed z-50 flex items-center",
-          isLeft ? "left-4 flex-row" : "right-4 flex-row-reverse"
+          "fixed z-50",
+          isLeft ? "left-4" : "right-4"
         )}
+        initial={false}
+        animate={{
+          x: 0,
+        }}
         style={{
           bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
         }}
       >
-        <div className={cn("flex items-center gap-1", isLeft ? "flex-row" : "flex-row-reverse")}>
-          {/* Expandable buttons */}
+        <div className="relative">
+          {/* Expandable buttons - expand UPWARD */}
           <AnimatePresence>
             {isExpanded && (
               <motion.div
-                initial={{ width: 0, opacity: 0, scale: 0.8 }}
-                animate={{ width: "auto", opacity: 1, scale: 1 }}
-                exit={{ width: 0, opacity: 0, scale: 0.8 }}
+                initial={{ opacity: 0, y: 20, scale: 0.8 }}
+                animate={{ opacity: 1, y: 0, scale: 1 }}
+                exit={{ opacity: 0, y: 20, scale: 0.8 }}
                 transition={{
                   type: "spring",
                   stiffness: 500,
                   damping: 35,
                 }}
-                className={cn(
-                  "flex items-center overflow-hidden bg-black/90 backdrop-blur-sm border border-purple-500/50 rounded-full px-1 py-1",
-                  isLeft ? "flex-row ml-2" : "flex-row-reverse mr-2"
-                )}
+                className="absolute bottom-16 left-0 right-0 flex flex-col items-center gap-2 pb-2"
               >
                 {NAV_ITEMS.map((item, index) => {
                   const isActive = index === activeIndex;
                   const Icon = item.icon;
 
                   return (
-                    <Link
+                    <motion.div
                       key={item.href}
-                      href={item.href}
-                      onClick={() => setIsExpanded(false)}
-                      className="relative flex items-center justify-center p-3 rounded-full"
+                      initial={{ opacity: 0, y: 10 }}
+                      animate={{ 
+                        opacity: 1, 
+                        y: 0,
+                        transition: { delay: index * 0.05 }
+                      }}
+                      exit={{ 
+                        opacity: 0, 
+                        y: 10,
+                        transition: { delay: (NAV_ITEMS.length - index - 1) * 0.03 }
+                      }}
                     >
-                      {isActive && (
-                        <motion.div
-                          layoutId="nav-active"
-                          className="absolute inset-0 rounded-full bg-purple-500"
-                          transition={{
-                            type: "spring",
-                            stiffness: 400,
-                            damping: 30,
-                          }}
-                        />
-                      )}
-                      <Icon
+                      <Link
+                        href={item.href}
+                        onClick={() => setIsExpanded(false)}
                         className={cn(
-                          "w-5 h-5 relative z-10 transition-colors",
-                          isActive ? "text-black" : "text-zinc-400"
+                          "flex items-center justify-center w-12 h-12 rounded-full transition-all shadow-lg",
+                          isActive
+                            ? "bg-purple-500 shadow-purple-500/30"
+                            : "bg-zinc-900 border border-purple-500/30 shadow-black/30"
                         )}
-                      />
-                    </Link>
+                      >
+                        <Icon
+                          className={cn(
+                            "w-5 h-5",
+                            isActive ? "text-black" : "text-zinc-400"
+                          )}
+                        />
+                      </Link>
+                    </motion.div>
                   );
                 })}
               </motion.div>
@@ -145,19 +170,22 @@ export function NavBar() {
 
           {/* Main button (always visible) - draggable */}
           <motion.button
-            drag
-            dragConstraints={{ left: 0, right: 0, top: 0, bottom: 0 }}
-            dragElastic={0.2}
+            drag="x"
+            dragConstraints={{ left: isLeft ? 0 : -300, right: isLeft ? 300 : 0 }}
+            dragElastic={0.1}
+            onDragStart={handleDragStart}
+            onDrag={handleDrag}
             onDragEnd={handleDragEnd}
             onClick={toggleExpanded}
             whileHover={{ scale: 1.05 }}
             whileTap={{ scale: 0.95 }}
+            style={{ x }}
             className="w-14 h-14 rounded-full bg-purple-500 flex items-center justify-center shadow-lg shadow-purple-500/30 border-2 border-purple-400 cursor-grab active:cursor-grabbing touch-none"
           >
             <ActiveIcon className="w-6 h-6 text-black" />
           </motion.button>
         </div>
-      </div>
+      </motion.div>
     </>
   );
 }
