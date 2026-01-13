@@ -6,38 +6,8 @@ import { ArrowLeft } from "lucide-react";
 import { sdk } from "@farcaster/miniapp-sdk";
 import { NavBar } from "@/components/nav-bar";
 
-type MiniAppContext = {
-  user?: {
-    fid: number;
-    username?: string;
-    displayName?: string;
-    pfpUrl?: string;
-  };
-};
-
 export default function InfoPage() {
   const readyRef = useRef(false);
-  const [context, setContext] = useState<MiniAppContext | null>(null);
-
-  useEffect(() => {
-    let cancelled = false;
-    const hydrateContext = async () => {
-      try {
-        const ctx = (await (sdk as unknown as {
-          context: Promise<MiniAppContext> | MiniAppContext;
-        }).context) as MiniAppContext;
-        if (!cancelled) {
-          setContext(ctx);
-        }
-      } catch {
-        if (!cancelled) setContext(null);
-      }
-    };
-    hydrateContext();
-    return () => {
-      cancelled = true;
-    };
-  }, []);
 
   useEffect(() => {
     const timeout = setTimeout(() => {
@@ -52,10 +22,9 @@ export default function InfoPage() {
   return (
     <main className="flex h-screen w-screen justify-center overflow-hidden bg-black font-mono text-white">
       <div
-        className="relative flex h-full w-full max-w-[520px] flex-1 flex-col overflow-hidden rounded-[28px] bg-black px-2 pb-4 shadow-inner"
+        className="relative flex h-full w-full max-w-[520px] flex-1 flex-col overflow-hidden bg-black px-2"
         style={{
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
-          paddingBottom: "0px",,
         }}
       >
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -70,7 +39,7 @@ export default function InfoPage() {
             <h1 className="text-2xl font-bold tracking-wide">INFO</h1>
           </div>
 
-          <div className="space-y-6 px-2 overflow-y-auto scrollbar-hide flex-1">
+          <div className="space-y-6 px-2 overflow-y-auto scrollbar-hide flex-1 pb-32">
             <section>
               <h2 className="text-lg font-bold text-purple-500 mb-2">
                 What Is Franchiser?
@@ -178,7 +147,7 @@ export default function InfoPage() {
               </ul>
             </section>
 
-            <section className="pb-4">
+            <section className="pb-8">
               <h2 className="text-lg font-bold text-purple-500 mb-2">
                 Permanent Liquidity
               </h2>
