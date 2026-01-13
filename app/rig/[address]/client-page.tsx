@@ -682,19 +682,19 @@ export default function RigDetailPage() {
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide">
           {/* Token Info + Price */}
           <div className="px-2 flex gap-3">
-            <div className="flex-1">
-              <div className="text-xs text-zinc-500 font-medium">{tokenSymbol}</div>
-              <h1 className="text-xl font-bold">{tokenName}</h1>
-              <div ref={priceRef} className="mt-1">
-                <span className="text-2xl font-bold">${displayPriceUsd.toFixed(6)}</span>
-              </div>
-            </div>
             <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-900 flex items-center justify-center flex-shrink-0">
               {tokenLogoUrl ? (
                 <img src={tokenLogoUrl} alt={tokenSymbol} className="w-12 h-12 object-cover rounded-xl" />
               ) : (
                 <span className="text-lg font-bold text-purple-500">{tokenSymbol.slice(0, 2)}</span>
               )}
+            </div>
+            <div className="flex-1 text-right">
+              <div className="text-xs text-zinc-500 font-medium">{tokenSymbol}</div>
+              <h1 className="text-xl font-bold">{tokenName}</h1>
+              <div ref={priceRef} className="mt-1">
+                <span className="text-2xl font-bold">${displayPriceUsd.toFixed(6)}</span>
+              </div>
             </div>
           </div>
 
@@ -1086,7 +1086,7 @@ export default function RigDetailPage() {
         </div>
 
         {/* Bottom Action Bar */}
-        <div className="fixed bottom-0 left-0 right-0 bg-purple-500">
+        <div className="fixed bottom-0 left-0 right-0 bg-white">
           <div
             className="max-w-[520px] mx-auto px-3 pt-3"
             style={{
@@ -1101,17 +1101,17 @@ export default function RigDetailPage() {
                   onChange={(e) => setCustomMessage(e.target.value)}
                   placeholder="Add a message..."
                   maxLength={100}
-                  className="w-full rounded-lg bg-purple-600/50 border border-purple-400/30 px-3 py-2 text-sm text-white placeholder-purple-200/50 focus:outline-none focus:border-purple-300 disabled:opacity-40 mb-2"
+                  className="w-full rounded-lg bg-zinc-100 border border-zinc-200 px-3 py-2 text-sm text-black placeholder-zinc-400 focus:outline-none focus:border-purple-400 disabled:opacity-40 mb-2"
                   disabled={isMineDisabled}
                 />
                 <div className="flex items-center justify-between gap-4">
                   <div className="flex-1">
-                    <div className="text-xs text-purple-200 mb-1">Mine price</div>
-                    <div className="text-lg font-semibold text-white">Ξ{priceEth.toFixed(6)}</div>
-                    <div className="text-xs text-purple-200">{formatUsd(priceUsd)}</div>
+                    <div className="text-xs text-zinc-500 mb-1">Mine price</div>
+                    <div className="text-lg font-semibold text-black">Ξ{priceEth.toFixed(6)}</div>
+                    <div className="text-xs text-zinc-500">{formatUsd(priceUsd)}</div>
                   </div>
                   <div className="text-right">
-                    <div className="text-[10px] text-purple-200 mb-1">
+                    <div className="text-[10px] text-zinc-500 mb-1">
                       Balance: Ξ{ethBalance.toFixed(4)}
                     </div>
                     <div className="flex items-center gap-2 justify-end">
@@ -1122,7 +1122,7 @@ export default function RigDetailPage() {
                           "w-[calc(50vw-16px)] max-w-[244px] py-2.5 rounded-lg font-semibold transition-all text-sm",
                           mineResult === "failure"
                             ? "bg-zinc-700 text-white"
-                            : "bg-white text-black hover:bg-gray-100 active:scale-[0.98]",
+                            : "bg-purple-500 text-white hover:bg-purple-600 active:scale-[0.98]",
                           isMineDisabled && !mineResult && "opacity-40 cursor-not-allowed"
                         )}
                       >
@@ -1135,9 +1135,9 @@ export default function RigDetailPage() {
             ) : (
               <>
                 {/* Trade Input */}
-                <div className="bg-purple-600/50 border border-purple-400/30 rounded-xl p-3">
+                <div className="bg-zinc-100 border border-zinc-200 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-purple-200">You pay</span>
+                    <span className="text-xs text-zinc-500">You pay</span>
                     {tradeBalance && (
                       <button
                         onClick={() => {
@@ -1148,20 +1148,20 @@ export default function RigDetailPage() {
                             setTradeAmount(formatUnits(unitBalanceData.value, 18));
                           }
                         }}
-                        className="text-xs text-purple-200 hover:text-white"
+                        className="text-xs text-zinc-500 hover:text-black"
                       >
                         Balance: {parseFloat(formatUnits(tradeBalance.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 })}
                       </button>
                     )}
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-purple-700/50 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-200 flex items-center justify-center">
                       {tradeDirection === "buy" ? (
                         <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
                       ) : tokenLogoUrl ? (
                         <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
                       ) : (
-                        <span className="text-xs font-bold text-white">{tokenSymbol.slice(0, 2)}</span>
+                        <span className="text-xs font-bold text-black">{tokenSymbol.slice(0, 2)}</span>
                       )}
                     </div>
                     <input
@@ -1169,13 +1169,13 @@ export default function RigDetailPage() {
                       value={tradeAmount}
                       onChange={(e) => setTradeAmount(e.target.value)}
                       placeholder="0"
-                      className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-white placeholder-purple-200/50 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
+                      className="flex-1 min-w-0 bg-transparent text-xl font-semibold text-black placeholder-zinc-400 focus:outline-none [appearance:textfield] [&::-webkit-outer-spin-button]:appearance-none [&::-webkit-inner-spin-button]:appearance-none"
                     />
-                    <span className="shrink-0 text-sm font-semibold text-purple-200">
+                    <span className="shrink-0 text-sm font-semibold text-zinc-500">
                       {tradeDirection === "buy" ? "ETH" : tokenSymbol}
                     </span>
                   </div>
-                  <div className="text-xs text-purple-200 mt-1">
+                  <div className="text-xs text-zinc-500 mt-1">
                     {tradeAmount && parseFloat(tradeAmount) > 0
                       ? `$${(parseFloat(tradeAmount) * (tradeDirection === "buy" ? ethUsdPrice : displayPriceUsd)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                       : "$0.00"}
@@ -1189,17 +1189,17 @@ export default function RigDetailPage() {
                       setTradeDirection(tradeDirection === "buy" ? "sell" : "buy");
                       setTradeAmount("");
                     }}
-                    className="bg-purple-700 hover:bg-purple-800 p-2 rounded-xl border-4 border-purple-500 transition-colors"
+                    className="bg-purple-500 hover:bg-purple-600 p-2 rounded-xl border-4 border-white transition-colors"
                   >
                     <ArrowDownUp className="w-4 h-4 text-white" />
                   </button>
                 </div>
 
                 {/* Trade Output */}
-                <div className="bg-purple-600/30 border border-purple-400/20 rounded-xl p-3">
+                <div className="bg-zinc-50 border border-zinc-200 rounded-xl p-3">
                   <div className="flex items-center justify-between mb-1">
-                    <span className="text-xs text-purple-200">You receive</span>
-                    <span className="text-xs text-purple-200">
+                    <span className="text-xs text-zinc-500">You receive</span>
+                    <span className="text-xs text-zinc-500">
                       Balance: {tradeDirection === "buy"
                         ? (unitBalanceData ? parseFloat(formatUnits(unitBalanceData.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0")
                         : (ethBalanceData ? parseFloat(formatUnits(ethBalanceData.value, 18)).toLocaleString(undefined, { maximumFractionDigits: 4 }) : "0")
@@ -1207,18 +1207,18 @@ export default function RigDetailPage() {
                     </span>
                   </div>
                   <div className="flex items-center gap-2">
-                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-purple-700/50 flex items-center justify-center">
+                    <div className="w-7 h-7 rounded-full overflow-hidden flex-shrink-0 bg-zinc-200 flex items-center justify-center">
                       {tradeDirection === "buy" ? (
                         tokenLogoUrl ? (
                           <img src={tokenLogoUrl} alt={tokenSymbol} className="w-full h-full object-cover" />
                         ) : (
-                          <span className="text-xs font-bold text-white">{tokenSymbol.slice(0, 2)}</span>
+                          <span className="text-xs font-bold text-black">{tokenSymbol.slice(0, 2)}</span>
                         )
                       ) : (
                         <img src="https://assets.coingecko.com/coins/images/279/small/ethereum.png" alt="ETH" className="w-full h-full object-cover" />
                       )}
                     </div>
-                    <div className="flex-1 text-xl font-semibold text-white">
+                    <div className="flex-1 text-xl font-semibold text-black">
                       {isTradeLoading && tradeAmount ? (
                         <span className="inline-flex items-center gap-0.5">
                           <span className="animate-bounce-dot-1">•</span>
@@ -1227,11 +1227,11 @@ export default function RigDetailPage() {
                         </span>
                       ) : formattedTradeOutput}
                     </div>
-                    <span className="shrink-0 text-sm font-semibold text-purple-200">
+                    <span className="shrink-0 text-sm font-semibold text-zinc-500">
                       {tradeDirection === "buy" ? tokenSymbol : "ETH"}
                     </span>
                   </div>
-                  <div className="text-xs text-purple-200 mt-1">
+                  <div className="text-xs text-zinc-500 mt-1">
                     {parseFloat(tradeOutputAmount) > 0
                       ? `$${(parseFloat(tradeOutputAmount) * (tradeDirection === "buy" ? displayPriceUsd : ethUsdPrice)).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`
                       : "$0.00"}
@@ -1239,7 +1239,7 @@ export default function RigDetailPage() {
                 </div>
 
                 {/* Trade Info */}
-                <div className="flex justify-between text-xs text-purple-200 px-1 py-2">
+                <div className="flex justify-between text-xs text-zinc-500 px-1 py-2">
                   <span>Min. received</span>
                   <span>
                     {tradePriceQuote?.buyAmount
@@ -1249,10 +1249,10 @@ export default function RigDetailPage() {
                   </span>
                 </div>
                 <div className="flex justify-between text-xs px-1 pb-3">
-                  <span className="text-purple-200">Price impact / Slippage</span>
+                  <span className="text-zinc-500">Price impact / Slippage</span>
                   <span className={cn(
-                    priceImpact !== null && priceImpact > 10 ? "text-red-300" :
-                    priceImpact !== null && priceImpact > 5 ? "text-yellow-300" : "text-purple-200"
+                    priceImpact !== null && priceImpact > 10 ? "text-red-500" :
+                    priceImpact !== null && priceImpact > 5 ? "text-yellow-600" : "text-zinc-500"
                   )}>
                     {priceImpact !== null && priceImpact > 5 && "⚠️ "}
                     {priceImpact !== null ? `${priceImpact.toFixed(2)}%` : "—"} / {slippage}%
@@ -1264,7 +1264,7 @@ export default function RigDetailPage() {
                   onClick={handleTrade}
                   disabled={!canTrade || isTradePending || tradeResult !== null}
                   className={cn(
-                    "w-full py-3 rounded-lg font-semibold transition-all text-sm bg-white text-black hover:bg-gray-100",
+                    "w-full py-3 rounded-lg font-semibold transition-all text-sm bg-purple-500 text-white hover:bg-purple-600",
                     (!canTrade || isTradePending || tradeResult !== null) && "cursor-not-allowed",
                     (!canTrade || isTradePending) && tradeResult === null && "opacity-40"
                   )}
@@ -1274,7 +1274,7 @@ export default function RigDetailPage() {
 
                 {/* No Liquidity Message */}
                 {hasNoLiquidity && tradeAmount && parseFloat(tradeAmount) > 0 && (
-                  <div className="mt-2 text-center text-xs text-purple-200">
+                  <div className="mt-2 text-center text-xs text-zinc-500">
                     This token may only be tradeable on its native DEX
                   </div>
                 )}
