@@ -3,7 +3,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams } from "next/navigation";
 import { useQuery } from "@tanstack/react-query";
-import { ArrowLeft, Copy, Check, Share2, Home, Pickaxe, ChevronDown } from "lucide-react";
+import { Copy, Check, Share2, Home, Pickaxe, ChevronDown, MessageSquare } from "lucide-react";
 import Link from "next/link";
 import {
   useBalance,
@@ -67,18 +67,17 @@ export default function RigDetailPage() {
   const mineResultTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const [selectedTimeframe, setSelectedTimeframe] = useState<Timeframe>("1D");
   const [chartHover, setChartHover] = useState<HoverData>(null);
-  const [showHeaderTicker, setShowHeaderTicker] = useState(false);
   const [copiedAddress, setCopiedAddress] = useState<string | null>(null);
   const [copiedLink, setCopiedLink] = useState(false);
   const [chartExpanded, setChartExpanded] = useState(false);
   const [minePriceInUsd, setMinePriceInUsd] = useState(false);
+  const [showMessageInput, setShowMessageInput] = useState(false);
   const [lastMineDetails, setLastMineDetails] = useState<{
     priceSpent: string;
     message: string;
   } | null>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const priceRef = useRef<HTMLDivElement>(null);
-  const headerRef = useRef<HTMLDivElement>(null);
 
   const { address, isConnected, connect, user: farcasterUser } = useFarcaster();
 
@@ -169,24 +168,6 @@ export default function RigDetailPage() {
       if (mineResultTimeoutRef.current) clearTimeout(mineResultTimeoutRef.current);
     };
   }, []);
-
-  useEffect(() => {
-    const container = scrollContainerRef.current;
-    const price = priceRef.current;
-    const header = headerRef.current;
-    if (!container || !price || !header) return;
-
-    const handleScroll = () => {
-      const priceRect = price.getBoundingClientRect();
-      const headerRect = header.getBoundingClientRect();
-      setShowHeaderTicker(priceRect.bottom < headerRect.bottom);
-    };
-
-    handleScroll();
-
-    container.addEventListener("scroll", handleScroll, { passive: true });
-    return () => container.removeEventListener("scroll", handleScroll);
-  }, [rigInfo, rigState]);
 
   useEffect(() => {
     if (!receipt) return;
@@ -419,63 +400,21 @@ export default function RigDetailPage() {
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
         }}
       >
-        {/* Fixed Header */}
-        <div ref={headerRef} className="px-2 pb-2">
-          <div className="relative flex items-center justify-between">
-            <Link href="/explore" className="p-1 -ml-1 hover:opacity-70 transition-opacity z-10">
-              <ArrowLeft className="h-5 w-5 text-purple-500" />
-            </Link>
-            <div
-              className={cn(
-                "absolute left-1/2 -translate-x-1/2 text-center transition-opacity duration-200",
-                showHeaderTicker ? "opacity-100" : "opacity-0 pointer-events-none"
-              )}
-            >
-              <div className="text-xs font-medium text-white">{tokenName}</div>
-              <div className="text-xs text-zinc-400">${displayPriceUsd.toFixed(6)}</div>
-            </div>
-            <button
-              onClick={async () => {
-                const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
-                try {
-                  await navigator.clipboard.writeText(rigUrl);
-                  setCopiedLink(true);
-                  setTimeout(() => setCopiedLink(false), 2000);
-                } catch {
-                  const textArea = document.createElement("textarea");
-                  textArea.value = rigUrl;
-                  textArea.style.position = "fixed";
-                  textArea.style.left = "-9999px";
-                  document.body.appendChild(textArea);
-                  textArea.select();
-                  document.execCommand("copy");
-                  document.body.removeChild(textArea);
-                  setCopiedLink(true);
-                  setTimeout(() => setCopiedLink(false), 2000);
-                }
-              }}
-              className="p-1 -mr-1 hover:opacity-70 transition-opacity z-10"
-            >
-              {copiedLink ? <Check className="h-5 w-5 text-green-400" /> : <Share2 className="h-5 w-5 text-zinc-400" />}
-            </button>
-          </div>
-        </div>
-
         {/* Scrollable Content */}
         <div ref={scrollContainerRef} className="flex-1 overflow-y-auto scrollbar-hide">
           {/* Token Info + Price */}
-          <div className="px-2 flex gap-3">
-            <div className="w-12 h-12 rounded-xl overflow-hidden bg-zinc-900 flex items-center justify-center flex-shrink-0">
+          <div className="px-3 flex gap-3 items-start">
+            <div className="w-14 h-14 rounded-xl overflow-hidden bg-zinc-900 flex items-center justify-center flex-shrink-0">
               {tokenLogoUrl ? (
-                <img src={tokenLogoUrl} alt={tokenSymbol} className="w-12 h-12 object-cover rounded-xl" />
+                <img src={tokenLogoUrl} alt={tokenSymbol} className="w-14 h-14 object-cover rounded-xl" />
               ) : (
                 <span className="text-lg font-bold text-purple-500">{tokenSymbol.slice(0, 2)}</span>
               )}
             </div>
-            <div className="flex-1 text-right">
+            <div className="flex-1">
               <div className="text-xs text-zinc-500 font-medium">{tokenSymbol}</div>
               <h1 className="text-xl font-bold">{tokenName}</h1>
-              <div ref={priceRef} className="mt-1">
+              <div ref={priceRef} className="mt-0.5">
                 <span className="text-2xl font-bold">${displayPriceUsd.toFixed(6)}</span>
               </div>
             </div>
@@ -483,7 +422,7 @@ export default function RigDetailPage() {
 
           {/* Current Miner - Centered */}
           {hasMiner && (
-            <div className="mt-6 px-2">
+            <div className="mt-6 px-3">
               <div className="flex flex-col items-center">
                 <button
                   onClick={() => minerFid && viewProfile(minerFid)}
@@ -548,60 +487,36 @@ export default function RigDetailPage() {
             </div>
           )}
 
-          {/* Mining Cost Chart - Collapsible */}
-          <div className="mt-4">
-            <button 
-              onClick={() => setChartExpanded(!chartExpanded)}
-              className="w-full flex items-center justify-between px-2 py-2 hover:bg-zinc-900/30 transition-colors rounded-lg"
-            >
-              <span className="text-xs text-zinc-500">Mine Cost</span>
-              <div className="flex items-center gap-2">
-                {(() => {
-                  const displayData = chartHover ?? (chartData.length > 0 ? chartData[chartData.length - 1] : null);
-                  if (!displayData) {
-                    return <span className="text-xs text-zinc-600">--</span>;
-                  }
-                  return (
-                    <span className="text-xs text-white font-medium">
-                      ${displayData.value.toFixed(4)}
-                    </span>
-                  );
-                })()}
-                <ChevronDown className={cn(
-                  "w-4 h-4 text-zinc-500 transition-transform",
-                  chartExpanded && "rotate-180"
-                )} />
-              </div>
-            </button>
-            
-            {chartExpanded && (
-              <>
-                <LazyPriceChart data={chartData} isLoading={isLoadingPrice} height={160} onHover={setChartHover} timeframeSeconds={timeframeSeconds} tokenFirstActiveTime={tokenFirstActiveTime} />
-                
-                {/* Timeframe Tabs */}
-                <div className="flex justify-between px-2 mt-2">
-                  {(["1D", "1W", "1M", "ALL"] as const).map((tf) => (
-                    <button
-                      key={tf}
-                      onClick={() => setSelectedTimeframe(tf)}
-                      className={cn(
-                        "flex-1 py-2 text-xs font-medium transition-colors",
-                        selectedTimeframe === tf
-                          ? "text-purple-500"
-                          : "text-zinc-600 hover:text-zinc-400"
-                      )}
-                    >
-                      {tf}
-                    </button>
-                  ))}
-                </div>
-              </>
-            )}
-          </div>
-
           {/* About */}
-          <div className="px-2 mt-6">
-            <h2 className="text-base font-bold mb-3">About</h2>
+          <div className="px-3 mt-6">
+            <div className="flex items-center justify-between mb-3">
+              <h2 className="text-base font-bold">About</h2>
+              <button
+                onClick={async () => {
+                  const rigUrl = `${window.location.origin}/rig/${rigAddress}`;
+                  try {
+                    await navigator.clipboard.writeText(rigUrl);
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2000);
+                  } catch {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = rigUrl;
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "-9999px";
+                    document.body.appendChild(textArea);
+                    textArea.select();
+                    document.execCommand("copy");
+                    document.body.removeChild(textArea);
+                    setCopiedLink(true);
+                    setTimeout(() => setCopiedLink(false), 2000);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-2.5 py-1 rounded-lg bg-zinc-800 hover:bg-zinc-700 transition-colors text-xs text-zinc-400"
+              >
+                {copiedLink ? <Check className="w-3.5 h-3.5 text-green-400" /> : <Share2 className="w-3.5 h-3.5" />}
+                {copiedLink ? "Copied" : "Share"}
+              </button>
+            </div>
             {hasLauncher && (
               <div className="flex items-center gap-2 mb-3">
                 <span className="text-sm text-zinc-500">Deployed by</span>
@@ -725,6 +640,57 @@ export default function RigDetailPage() {
             volume24h={volume24h}
           />
 
+          {/* Mining Cost Chart - Collapsible */}
+          <div className="mt-4 px-3">
+            <button 
+              onClick={() => setChartExpanded(!chartExpanded)}
+              className="w-full flex items-center justify-between py-2 hover:bg-zinc-900/30 transition-colors rounded-lg"
+            >
+              <span className="text-xs text-zinc-500">Mine Cost</span>
+              <div className="flex items-center gap-2">
+                {(() => {
+                  const displayData = chartHover ?? (chartData.length > 0 ? chartData[chartData.length - 1] : null);
+                  if (!displayData) {
+                    return <span className="text-xs text-zinc-600">--</span>;
+                  }
+                  return (
+                    <span className="text-xs text-white font-medium">
+                      ${displayData.value.toFixed(4)}
+                    </span>
+                  );
+                })()}
+                <ChevronDown className={cn(
+                  "w-4 h-4 text-zinc-500 transition-transform",
+                  chartExpanded && "rotate-180"
+                )} />
+              </div>
+            </button>
+            
+            {chartExpanded && (
+              <>
+                <LazyPriceChart data={chartData} isLoading={isLoadingPrice} height={160} onHover={setChartHover} timeframeSeconds={timeframeSeconds} tokenFirstActiveTime={tokenFirstActiveTime} />
+                
+                {/* Timeframe Tabs */}
+                <div className="flex justify-between mt-2">
+                  {(["1D", "1W", "1M", "ALL"] as const).map((tf) => (
+                    <button
+                      key={tf}
+                      onClick={() => setSelectedTimeframe(tf)}
+                      className={cn(
+                        "flex-1 py-2 text-xs font-medium transition-colors",
+                        selectedTimeframe === tf
+                          ? "text-purple-500"
+                          : "text-zinc-600 hover:text-zinc-400"
+                      )}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+              </>
+            )}
+          </div>
+
           {/* Leaderboard */}
           <Leaderboard
             entries={leaderboardEntries}
@@ -737,7 +703,7 @@ export default function RigDetailPage() {
 
           {/* Friend Activity Banner */}
           {friendActivityMessage && friendActivity?.friends && friendActivity.friends.length > 0 && (
-            <div className="px-2 mt-6">
+            <div className="px-3 mt-6">
               <div className="flex items-center gap-2 p-3 rounded-xl bg-purple-500/10 border border-purple-500/20">
                 <div className="flex -space-x-2">
                   {friendActivity.friends.slice(0, 3).map((friend) => (
@@ -764,7 +730,7 @@ export default function RigDetailPage() {
           )}
 
           {/* Recent Mines */}
-          <div className="px-2 mt-6">
+          <div className="px-3 mt-6">
             <h2 className="text-base font-bold mb-3">Recent mines</h2>
             <div className="space-y-2">
               {mineHistory.length === 0 ? (
@@ -783,60 +749,108 @@ export default function RigDetailPage() {
 
         {/* Floating Action Buttons */}
         <div 
-          className="fixed right-4 flex items-end gap-3"
+          className="fixed right-3 flex items-end gap-2"
           style={{
-            bottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+            bottom: "calc(env(safe-area-inset-bottom, 0px) + 16px)",
           }}
         >
-          {/* Mine Button with Price Tooltip */}
-          <div className="relative">
-            {/* Price Tooltip */}
-            <button
-              onClick={() => setMinePriceInUsd(!minePriceInUsd)}
-              className="absolute -left-2 top-1/2 -translate-y-1/2 -translate-x-full bg-zinc-900 border border-zinc-700 rounded-lg px-3 py-1.5 whitespace-nowrap"
-            >
-              <div className="text-xs text-zinc-400">Mine price</div>
-              <div className="text-sm font-semibold text-white">
-                {minePriceInUsd ? formatUsd(priceUsd) : `Ξ${priceEth.toFixed(6)}`}
-              </div>
-            </button>
-            
-            {/* Pickaxe Button */}
-            <button
-              onClick={handleMine}
-              disabled={isMineDisabled}
-              className={cn(
-                "w-14 h-14 rounded-full flex items-center justify-center shadow-lg transition-all",
-                mineResult === "success"
-                  ? "bg-green-500"
-                  : mineResult === "failure"
-                  ? "bg-zinc-700"
-                  : "bg-purple-500 hover:bg-purple-600 active:scale-95",
-                isMineDisabled && !mineResult && "opacity-50"
-              )}
-            >
-              {mineResult === "success" ? (
-                <Check className="w-6 h-6 text-white" />
-              ) : isWriting || isConfirming ? (
-                <span className="inline-flex items-center gap-0.5 text-white">
-                  <span className="animate-bounce-dot-1">•</span>
-                  <span className="animate-bounce-dot-2">•</span>
-                  <span className="animate-bounce-dot-3">•</span>
-                </span>
-              ) : (
-                <Pickaxe className="w-6 h-6 text-white" />
-              )}
-            </button>
+          {/* Mine Controls */}
+          <div className="flex items-center">
+            {/* Price Pill + Message + Mine Button Row */}
+            <div className="flex items-center">
+              {/* Price Pill */}
+              <button
+                onClick={() => setMinePriceInUsd(!minePriceInUsd)}
+                className="bg-zinc-900 border border-zinc-700 rounded-l-full pl-4 pr-3 py-2 flex items-center gap-2"
+              >
+                <div>
+                  <div className="text-[10px] text-zinc-500 leading-tight">Mine price</div>
+                  <div className="text-sm font-semibold text-white leading-tight">
+                    {minePriceInUsd ? formatUsd(priceUsd) : `Ξ${priceEth.toFixed(6)}`}
+                  </div>
+                </div>
+              </button>
+
+              {/* Message Button */}
+              <button
+                onClick={() => setShowMessageInput(!showMessageInput)}
+                className={cn(
+                  "bg-zinc-900 border-y border-zinc-700 px-3 py-3 transition-colors",
+                  showMessageInput ? "bg-zinc-800" : "hover:bg-zinc-800",
+                  customMessage && "text-purple-400"
+                )}
+              >
+                <MessageSquare className="w-5 h-5" />
+              </button>
+              
+              {/* Pickaxe Button */}
+              <button
+                onClick={handleMine}
+                disabled={isMineDisabled}
+                className={cn(
+                  "w-12 h-12 rounded-r-full flex items-center justify-center transition-all",
+                  mineResult === "success"
+                    ? "bg-green-500"
+                    : mineResult === "failure"
+                    ? "bg-zinc-700"
+                    : "bg-purple-500 hover:bg-purple-600 active:scale-95",
+                  isMineDisabled && !mineResult && "opacity-50"
+                )}
+              >
+                {mineResult === "success" ? (
+                  <Check className="w-5 h-5 text-white" />
+                ) : isWriting || isConfirming ? (
+                  <span className="inline-flex items-center gap-0.5 text-white text-sm">
+                    <span className="animate-bounce-dot-1">•</span>
+                    <span className="animate-bounce-dot-2">•</span>
+                    <span className="animate-bounce-dot-3">•</span>
+                  </span>
+                ) : (
+                  <Pickaxe className="w-5 h-5 text-white" />
+                )}
+              </button>
+            </div>
           </div>
 
           {/* Home Button */}
           <Link
             href="/explore"
-            className="w-14 h-14 rounded-full bg-zinc-800 hover:bg-zinc-700 flex items-center justify-center shadow-lg transition-all active:scale-95"
+            className="w-12 h-12 rounded-full bg-purple-500 hover:bg-purple-600 flex items-center justify-center shadow-lg transition-all active:scale-95"
           >
-            <Home className="w-6 h-6 text-white" />
+            <Home className="w-5 h-5 text-white" />
           </Link>
         </div>
+
+        {/* Message Input Popover */}
+        {showMessageInput && (
+          <div 
+            className="fixed right-3 bg-zinc-900 border border-zinc-700 rounded-xl p-3 shadow-xl"
+            style={{
+              bottom: "calc(env(safe-area-inset-bottom, 0px) + 80px)",
+              width: "calc(100% - 24px)",
+              maxWidth: "496px",
+            }}
+          >
+            <input
+              type="text"
+              value={customMessage}
+              onChange={(e) => setCustomMessage(e.target.value)}
+              placeholder="Add a message to your mine..."
+              maxLength={100}
+              autoFocus
+              className="w-full bg-zinc-800 border border-zinc-700 rounded-lg px-3 py-2 text-sm text-white placeholder-zinc-500 focus:outline-none focus:border-purple-500"
+            />
+            <div className="flex justify-between items-center mt-2">
+              <span className="text-xs text-zinc-500">{customMessage.length}/100</span>
+              <button
+                onClick={() => setShowMessageInput(false)}
+                className="text-xs text-purple-400 hover:text-purple-300"
+              >
+                Done
+              </button>
+            </div>
+          </div>
+        )}
       </div>
     </main>
   );
