@@ -4,14 +4,20 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { motion } from "framer-motion";
 import { cn } from "@/lib/utils";
-import { Search, Rocket, Gavel, Info, User } from "lucide-react";
+import { Search, Rocket, Gavel, Info, User, type LucideIcon } from "lucide-react";
 
-const NAV_ITEMS = [
-  { href: "/launch", icon: Rocket, label: "Launch" },
-  { href: "/auctions", icon: Gavel, label: "Auctions" },
-  { href: "/explore", icon: Search, label: "Explore", isCenter: true },
-  { href: "/info", icon: Info, label: "Info" },
-  { href: "/profile", icon: User, label: "Profile" },
+type NavItem = {
+  href: "/launch" | "/auctions" | "/explore" | "/info" | "/profile";
+  icon: LucideIcon;
+  isCenter?: boolean;
+};
+
+const NAV_ITEMS: NavItem[] = [
+  { href: "/launch", icon: Rocket },
+  { href: "/auctions", icon: Gavel },
+  { href: "/explore", icon: Search, isCenter: true },
+  { href: "/info", icon: Info },
+  { href: "/profile", icon: User },
 ];
 
 export function NavBar() {
@@ -50,9 +56,7 @@ export function NavBar() {
                   layoutId="nav-indicator"
                   className={cn(
                     "absolute inset-0 rounded-full",
-                    item.isCenter
-                      ? "bg-purple-500"
-                      : "bg-zinc-800"
+                    item.isCenter ? "bg-purple-500" : "bg-zinc-800"
                   )}
                   transition={{
                     type: "spring",
