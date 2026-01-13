@@ -2,7 +2,6 @@
 
 import { useEffect, useState, useRef } from "react";
 import { Search } from "lucide-react";
-import { AnimatePresence, motion } from "framer-motion";
 
 import { NavBar } from "@/components/nav-bar";
 import { RigCard } from "@/components/rig-card";
@@ -72,7 +71,7 @@ export default function ExplorePage() {
         }}
       >
         <div className="flex flex-1 flex-col overflow-hidden">
-          {/* Header - Original style */}
+          {/* Header */}
           <div className="mb-2">
             <h1 className="text-2xl font-bold tracking-wide">EXPLORE</h1>
           </div>
@@ -128,19 +127,17 @@ export default function ExplorePage() {
                 </p>
               </div>
             ) : (
-              <AnimatePresence mode="popLayout">
-                <motion.div className="space-y-1.5">
-                  {rigs.map((rig, index) => (
-                    <RigCard
-                      key={rig.address}
-                      rig={rig}
-                      donutUsdPrice={donutUsdPrice}
-                      isKing={sortBy === "top" && index === 0}
-                      isNewBump={rig.address === newBumpAddress}
-                    />
-                  ))}
-                </motion.div>
-              </AnimatePresence>
+              <div className="space-y-1.5">
+                {rigs.map((rig, index) => (
+                  <RigCard
+                    key={rig.address}
+                    rig={rig}
+                    donutUsdPrice={donutUsdPrice}
+                    isKing={sortBy === "top" && index === 0}
+                    isNewBump={rig.address === newBumpAddress}
+                  />
+                ))}
+              </div>
             )}
           </div>
         </div>

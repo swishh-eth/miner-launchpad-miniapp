@@ -2,7 +2,6 @@
 
 import { useEffect, useState, memo } from "react";
 import Link from "next/link";
-import { motion } from "framer-motion";
 import { formatEther } from "viem";
 import { Crown } from "lucide-react";
 import type { RigListItem } from "@/hooks/useAllRigs";
@@ -78,15 +77,8 @@ export const RigCard = memo(function RigCard({
   }, [rig.rigUri]);
 
   return (
-    <Link href={`/rig/${rig.address}`} className="block">
-      <motion.div
-        layout
-        initial={isNewBump ? { scale: 1.02, opacity: 0.8 } : false}
-        animate={{ scale: 1, opacity: 1 }}
-        transition={{
-          layout: { type: "spring", stiffness: 500, damping: 35 },
-          scale: { duration: 0.2 },
-        }}
+    <Link href={`/rig/${rig.address}`} className="block mb-1.5">
+      <div
         className={cn(
           "relative flex items-center gap-3 p-3 rounded-xl transition-all cursor-pointer",
           isKing
@@ -126,10 +118,8 @@ export const RigCard = memo(function RigCard({
 
         {/* Token Info */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-1.5">
-            <span className="font-semibold text-white truncate">
-              {rig.tokenName}
-            </span>
+          <div className="font-semibold text-white truncate">
+            {rig.tokenName}
           </div>
           <div className="text-sm text-zinc-500">{rig.tokenSymbol}</div>
         </div>
@@ -143,7 +133,7 @@ export const RigCard = memo(function RigCard({
             {formatUsd(marketCapUsd)} mcap
           </div>
         </div>
-      </motion.div>
+      </div>
     </Link>
   );
 });

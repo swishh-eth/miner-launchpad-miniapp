@@ -24,7 +24,6 @@ export function NavBar() {
   const pathname = usePathname();
   const isRigPage = pathname.startsWith("/rig/");
 
-  // Determine active index
   const activeIndex = NAV_ITEMS.findIndex((item) =>
     item.href === "/explore"
       ? pathname === "/explore" || isRigPage
@@ -50,14 +49,11 @@ export function NavBar() {
               href={item.href}
               className="relative flex items-center justify-center p-3 z-10"
             >
-              {/* Animated background circle */}
+              {/* Animated background circle - always purple */}
               {isActive && (
                 <motion.div
                   layoutId="nav-indicator"
-                  className={cn(
-                    "absolute inset-0 rounded-full",
-                    item.isCenter ? "bg-purple-500" : "bg-zinc-800"
-                  )}
+                  className="absolute inset-0 rounded-full bg-purple-500"
                   transition={{
                     type: "spring",
                     stiffness: 400,
@@ -80,11 +76,7 @@ export function NavBar() {
                 <Icon
                   className={cn(
                     "w-5 h-5 transition-colors",
-                    isActive
-                      ? item.isCenter
-                        ? "text-black"
-                        : "text-white"
-                      : "text-zinc-500"
+                    isActive ? "text-black" : "text-zinc-500"
                   )}
                 />
               </motion.div>
