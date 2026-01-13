@@ -71,10 +71,9 @@ export default function ExplorePage() {
   return (
     <main className="flex h-screen w-screen justify-center overflow-hidden bg-black font-mono text-white">
       <div
-        className="relative flex h-full w-full max-w-[520px] flex-1 flex-col overflow-hidden rounded-[28px] bg-black px-2 pb-4 shadow-inner"
+        className="relative flex h-full w-full max-w-[520px] flex-1 flex-col overflow-hidden bg-black px-2"
         style={{
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
-          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
         }}
       >
         <div className="flex flex-1 flex-col overflow-hidden">
@@ -112,7 +111,7 @@ export default function ExplorePage() {
           </div>
 
           {/* Rig List */}
-          <div className="flex-1 overflow-y-auto scrollbar-hide">
+          <div className="flex-1 overflow-y-auto scrollbar-hide pb-32">
             {isLoading ? (
               <div className="space-y-1.5">
                 {[...Array(6)].map((_, i) => (

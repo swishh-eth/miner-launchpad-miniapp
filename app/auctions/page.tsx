@@ -648,7 +648,7 @@ export default function AuctionsPage() {
         className="relative flex h-full w-full max-w-[520px] flex-1 flex-col overflow-hidden rounded-[28px] bg-black px-2 pb-4 shadow-inner"
         style={{
           paddingTop: "calc(env(safe-area-inset-top, 0px) + 8px)",
-          paddingBottom: "calc(env(safe-area-inset-bottom, 0px) + 24px)",
+          paddingBottom: "0px",,
         }}
       >
         <div className="flex flex-1 flex-col overflow-hidden">
